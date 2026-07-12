@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <title>Cấu hình danh sách tư vấn</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 24px; max-width: 900px; margin: 0 auto; color: #222; }
+    h2 { color: #d9772b; margin-bottom: 4px; }
+    .hint { font-size: 13px; color: #666; line-height: 1.5; }
+    .card { border: 1px solid #eee; border-radius: 10px; padding: 16px; margin-top: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    button { padding: 9px 16px; background: #f7941d; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; }
+    button:hover { background: #e07d0a; }
+    button.secondary { background: #6c757d; }
+    button.secondary:hover { background: #5a6268; }
+    input[type=file] { font-size: 13px; }
+    #msg { font-size: 13px; margin-top: 10px; min-height: 18px; }
+    #msg.ok { color: #1a7f37; }
+    #msg.err { color: #d9534f; }
+    table { border-collapse: collapse; width: 100%; margin-top: 12px; font-size: 13px; }
+    th, td { border: 1px solid #e5e5e5; padding: 6px 8px; text-align: left; vertical-align: top; }
+    th { background: #fbf1e6; }
+    code { background: #f4f4f4; padding: 1px 5px; border-radius: 4px; }
+    .cols { font-size: 13px; }
+    .cols td:first-child { font-weight: bold; white-space: nowrap; }
+    .muted { color: #888; }
+  </style>
+</head>
+<body>
+  <h2>💊 Cấu hình danh sách sản phẩm cần tư vấn</h2>
+  <p class="hint">Chuẩn bị một file <strong>Excel (.xlsx)</strong> theo mẫu, tải lên rồi bấm <strong>Lưu</strong>. Khi bán hàng trên Circa POS, hệ thống sẽ tự đối chiếu tên sản phẩm trong đơn với từ khoá và hiện gợi ý tư vấn tương ứng.</p>
+
+  <div class="card">
+    <strong>Cấu trúc file Excel (dòng đầu là tiêu đề cột):</strong>
+    <table class="cols">
+      <tr><td>Nhóm</td><td>Tên nhóm hiển thị trên khung gợi ý. VD: <em>Nhóm Vitamin C</em></td></tr>
+      <tr><td>Từ khoá</td><td>Từ khoá nhận diện sản phẩm trong đơn. Nhiều từ khoá ngăn cách bằng dấu phẩy <code>,</code>. VD: <em>vitamin c, vit c</em></td></tr>
+      <tr><td>Tên gợi ý</td><td>Tên sản phẩm gợi ý tư vấn/khuyến mãi. VD: <em>Kẽm Zinc Gluconate</em></td></tr>
+      <tr><td>Ghi chú</td><td>(Tuỳ chọn) Ghi chú kèm theo. VD: <em>Đang KM mua 2 tặng 1</em></td></tr>
+    </table>
+    <p class="hint">👉 Mỗi <strong>dòng</strong> là một gợi ý. Muốn 1 nhóm có nhiều gợi ý thì tạo nhiều dòng, lặp lại cột <em>Nhóm</em> và <em>Từ khoá</em> giống nhau (hoặc để trống — sẽ tự hiểu là thuộc nhóm ở dòng trên).</p>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <input type="file" id="file" accept=".xlsx,.xls" />
+      <button id="save">Lưu danh sách</button>
+      <button id="reset" class="secondary">Khôi phục mặc định</button>
+    </div>
+    <div id="msg"></div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="justify-content: space-between;">
+      <strong>Xem trước danh sách đang áp dụng</strong>
+      <span id="count" class="muted"></span>
+    </div>
+    <div id="preview"></div>
+  </div>
+
+  <script src="xlsx.full.min.js"></script>
+  <script src="data.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

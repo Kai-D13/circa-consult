@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Circa POS - Gợi ý tư vấn thuốc",
+  "version": "1.1.0",
+  "description": "Hiển thị gợi ý sản phẩm khuyến mãi/cần tư vấn khi đơn hàng Circa POS chứa sản phẩm nằm trong danh sách cần tư vấn. Danh sách cấu hình bằng file Excel.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://pos.v2.circa.vn/*"],
+  "action": {
+    "default_title": "Cấu hình danh sách tư vấn",
+    "default_popup": "popup.html"
+  },
+  "options_page": "options.html",
+  "content_scripts": [
+    {
+      "matches": ["https://pos.v2.circa.vn/*"],
+      "js": ["data.js", "content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}
