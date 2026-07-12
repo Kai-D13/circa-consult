@@ -1,0 +1,9 @@
+{
+  "name": "circa-consult-extension",
+  "version": "1.2.0",
+  "private": true,
+  "scripts": {
+    "test": "node --test --test-isolation=none tests/core.test.js",
+    "check": "node --check core.js && node --check background.js && node --check content.js && node --check options.js && node --check popup.js && node --check admin-portal/app.js"
+  }
+}

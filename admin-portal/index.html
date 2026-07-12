@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Circa – Quản trị dữ liệu tư vấn</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>Circa – Dữ liệu tư vấn bán kèm</h1>
+      <p>Import, kiểm tra, phát hành và khôi phục dataset cho toàn bộ POS.</p>
+    </div>
+    <div id="user-area" class="user-area hidden">
+      <span id="user-email"></span>
+      <button id="logout" class="secondary">Đăng xuất</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="auth-card" class="card auth-card">
+      <h2>Đăng nhập Admin</h2>
+      <label>Email<input id="email" type="email" autocomplete="username" value="hoangvudn96@gmail.com"></label>
+      <label>Mật khẩu<input id="password" type="password" autocomplete="current-password"></label>
+      <div class="actions">
+        <button id="login">Đăng nhập</button>
+        <button id="signup" class="secondary">Tạo tài khoản lần đầu</button>
+      </div>
+      <p class="hint">Chỉ email trong allowlist mới có quyền tạo draft và publish.</p>
+    </section>
+
+    <div id="app" class="hidden">
+      <section class="grid">
+        <article class="card status-card">
+          <div class="section-title">
+            <h2>Dataset đang áp dụng</h2>
+            <button id="refresh" class="secondary">Làm mới</button>
+          </div>
+          <dl id="current-status"><dt>Trạng thái</dt><dd>Đang tải…</dd></dl>
+        </article>
+
+        <article class="card">
+          <h2>Import dataset mới</h2>
+          <input id="dataset-file" type="file" accept=".xlsx,.xls">
+          <p class="hint">Sheet chấp nhận: <code>consultation_rules</code> hoặc <code>Sheet2</code>.</p>
+          <div id="validation-summary" class="validation empty">Chưa chọn file.</div>
+          <div class="actions">
+            <button id="save-draft" disabled>Lưu bản nháp</button>
+            <button id="clear-file" class="secondary" disabled>Xóa file</button>
+          </div>
+        </article>
+      </section>
+
+      <section id="preview-card" class="card hidden">
+        <div class="section-title">
+          <h2>Xem trước</h2>
+          <span id="preview-count"></span>
+        </div>
+        <div class="table-wrap"><table id="preview-table"></table></div>
+      </section>
+
+      <section class="card">
+        <div class="section-title">
+          <h2>Lịch sử phiên bản</h2>
+          <span class="hint">Publish một version sẽ tự archive version hiện tại.</span>
+        </div>
+        <div class="table-wrap"><table id="versions-table"></table></div>
+      </section>
+    </div>
+
+    <div id="toast" role="status" aria-live="polite"></div>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="xlsx.full.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
+

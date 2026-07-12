@@ -1,19 +1,24 @@
 {
   "manifest_version": 3,
-  "name": "Circa POS - Gợi ý tư vấn thuốc",
-  "version": "1.1.0",
-  "description": "Hiển thị gợi ý sản phẩm khuyến mãi/cần tư vấn khi đơn hàng Circa POS chứa sản phẩm nằm trong danh sách cần tư vấn. Danh sách cấu hình bằng file Excel.",
-  "permissions": ["storage"],
-  "host_permissions": ["https://pos.v2.circa.vn/*"],
+  "name": "Circa POS - Gợi ý tư vấn bán kèm",
+  "version": "1.2.0",
+  "description": "Đồng bộ dữ liệu tư vấn tập trung, nhận diện sản phẩm theo product ID và chỉ gợi ý sản phẩm còn tồn tại POS.",
+  "permissions": ["storage", "alarms"],
+  "host_permissions": [
+    "https://pos.v2.circa.vn/*",
+    "https://api.v2.circa.vn/*",
+    "https://wbbjxaegcubhyxgemucj.supabase.co/*"
+  ],
+  "background": { "service_worker": "background.js" },
   "action": {
-    "default_title": "Cấu hình danh sách tư vấn",
+    "default_title": "Trạng thái dữ liệu tư vấn",
     "default_popup": "popup.html"
   },
   "options_page": "options.html",
   "content_scripts": [
     {
-      "matches": ["https://pos.v2.circa.vn/*"],
-      "js": ["data.js", "content.js"],
+      "matches": ["https://pos.v2.circa.vn/ban-hang/*"],
+      "js": ["core.js", "content.js"],
       "css": ["content.css"],
       "run_at": "document_idle"
     }
