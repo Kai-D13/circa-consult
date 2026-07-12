@@ -1,0 +1,115 @@
+# QA checklist – Circa Consult Extension v1.2.0
+
+Ghi kết quả mỗi case: `PASS`, `FAIL`, `BLOCKED`, kèm POS, thời gian, dataset version và ảnh/video nếu lỗi.
+
+## A. Dataset và Admin Portal
+
+- [ ] Admin chưa xác nhận email không đăng nhập được.
+- [ ] Email không nằm trong allowlist không tạo draft được.
+- [ ] Admin hợp lệ đăng nhập được.
+- [ ] File không có `Sheet2`/`consultation_rules` bị từ chối.
+- [ ] Thiếu từng cột bắt buộc bị từ chối và chỉ rõ dòng/cột.
+- [ ] `source_product_id` chữ, âm, 0 hoặc rỗng bị từ chối.
+- [ ] `suggested_product_id` chữ, âm, 0 hoặc rỗng bị từ chối.
+- [ ] Source ID bằng suggested ID bị từ chối.
+- [ ] Cặp source → suggested trùng bị từ chối.
+- [ ] Thiếu tên/title/note bị từ chối.
+- [ ] `effective_to < effective_from` bị từ chối.
+- [ ] File mẫu 6 dòng validate thành công.
+- [ ] Preview hiển thị đúng 6 dòng.
+- [ ] Lưu draft không ảnh hưởng dataset đang published.
+- [ ] Publish draft chuyển version cũ sang archived.
+- [ ] Chỉ có đúng một version published.
+- [ ] Rollback archived version hoạt động.
+- [ ] Audit log ghi đúng create/publish/rollback và Admin email.
+
+## B. Central sync
+
+- [ ] Máy POS mới cài nhận dataset mà không import Excel.
+- [ ] Manual sync nhận version mới ngay.
+- [ ] Sync tự động khi Chrome khởi động.
+- [ ] Sync định kỳ tối đa 15 phút.
+- [ ] Options hiển thị version, số rule và thời gian sync đúng.
+- [ ] Draft không xuất hiện trên POS.
+- [ ] Dataset schema sai không ghi đè cache đang chạy.
+- [ ] Ngắt mạng vẫn dùng last-known-good dataset.
+- [ ] Kết nối lại mạng sync thành công.
+- [ ] Rollback được POS nhận ở lần sync tiếp theo.
+
+## C. Cart detection và exact matching
+
+- [ ] Trang `/ban-hang` chưa tạo đơn không hiển thị popup.
+- [ ] URL `/ban-hang/<order-id>` bắt được cart table.
+- [ ] Parse đúng dạng `product_id - product_name`.
+- [ ] Source ID có rule hiển thị loading kiểm tra tồn.
+- [ ] Tên giống keyword nhưng product ID khác không match.
+- [ ] Source không có rule không hiển thị popup.
+- [ ] Thêm hai source có rule xử lý cả hai.
+- [ ] Xóa source khỏi cart làm suggestion biến mất.
+- [ ] Suggestion đã có trong cart không được gợi ý lại.
+- [ ] Một suggested ID xuất hiện từ nhiều source không bị lặp.
+- [ ] Chuyển đơn hàng SPA không giữ suggestion đơn cũ.
+- [ ] Đóng popup không tự bật lại nếu cart không đổi.
+- [ ] Thêm trigger mới sau khi đóng làm popup xuất hiện lại.
+- [ ] Minimize/expand hoạt động.
+- [ ] Popup không che thao tác thanh toán quan trọng.
+
+## D. Stock-aware suggestion
+
+- [ ] Product `13720` tại POS test trả quantity `1` và được hiển thị khi là suggestion.
+- [ ] Product `2001395` trả `stock_details: []` và không hiển thị.
+- [ ] Stock ở location khác `auto_put_location` không hiển thị.
+- [ ] `location_type` khác `SALES` không hiển thị.
+- [ ] `quantity = 0` không hiển thị dù `on_hand_qty > 0`.
+- [ ] Có tồn nhưng `final_price <= 0` không hiển thị.
+- [ ] Nhiều lot SALES được cộng `availableQuantity` đúng.
+- [ ] Batch nhiều suggested IDs chỉ tạo một Product API request.
+- [ ] Cache tồn 60 giây giảm request lặp.
+- [ ] Sau 60 giây tồn được kiểm tra lại.
+- [ ] Đổi POS làm cache key thay đổi.
+- [ ] `pos_config`, `entity.id`, `storesClicked` lệch nhau thì không gọi API.
+
+## E. Auth/API failure
+
+- [ ] Thiếu cookie `session_token` không làm hỏng POS.
+- [ ] Token hết hạn/401 hiển thị cảnh báo phù hợp.
+- [ ] API 403 không retry liên tục.
+- [ ] API 500 không hiển thị suggestion chưa xác nhận tồn.
+- [ ] API timeout sau khoảng 5 giây.
+- [ ] Supabase 4xx/5xx giữ cache cũ.
+- [ ] Token không xuất hiện trong `chrome.storage.local`.
+- [ ] Token không xuất hiện trong console log.
+- [ ] Không có secret Supabase trong package extension.
+
+## F. Performance và compatibility
+
+- [ ] Chrome mục tiêu load extension không có manifest error.
+- [ ] Service worker không có uncaught exception.
+- [ ] Content script chỉ chạy dưới `/ban-hang/*`.
+- [ ] Observer theo dõi cart, không scan toàn bộ text trang.
+- [ ] Thêm/xóa liên tục 10 sản phẩm không treo UI.
+- [ ] Cart 20 sản phẩm phản hồi trong giới hạn chấp nhận.
+- [ ] Popup scroll được trên màn hình POS thực tế.
+- [ ] Tiếng Việt hiển thị đúng UTF-8.
+
+## G. Regression POS
+
+- [ ] Tìm sản phẩm vẫn hoạt động.
+- [ ] Thêm sản phẩm vào cart vẫn hoạt động.
+- [ ] Chọn đơn vị/lot-date vẫn hoạt động.
+- [ ] Thay đổi số lượng vẫn hoạt động.
+- [ ] Xóa sản phẩm vẫn hoạt động.
+- [ ] Thanh toán tiền mặt/chuyển khoản/thẻ không bị ảnh hưởng.
+- [ ] Tạo đơn mới sau thanh toán không giữ state cũ.
+
+## H. Pilot rollout
+
+- [ ] Pilot POS 1 trong ít nhất một ca bán hàng.
+- [ ] Đối chiếu 20 source products với expected suggestions.
+- [ ] Ghi nhận false positive = 0 cho exact-ID dataset.
+- [ ] Đối chiếu tồn của ít nhất 10 suggestions với màn tồn kho.
+- [ ] Pilot thêm 2 POS có location khác nhau.
+- [ ] Xác nhận cùng dataset version trên cả 3 POS.
+- [ ] Có phương án rollback extension v1.1.0 và dataset version cũ.
+- [ ] Stakeholder ký xác nhận trước rollout 25 POS.
+
