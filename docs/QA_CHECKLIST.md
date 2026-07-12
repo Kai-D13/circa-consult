@@ -7,7 +7,10 @@ Ghi kết quả mỗi case: `PASS`, `FAIL`, `BLOCKED`, kèm POS, thời gian, da
 - [ ] Admin chưa xác nhận email không đăng nhập được.
 - [ ] Email không nằm trong allowlist không tạo draft được.
 - [ ] Admin hợp lệ đăng nhập được.
-- [ ] File không có `Sheet2`/`consultation_rules` bị từ chối.
+- [ ] File một sheet tự chọn sheet và validate dữ liệu.
+- [ ] File nhiều sheet hiển thị đúng danh sách sheet để Admin chọn.
+- [ ] Chọn sheet thiếu schema bắt buộc bị từ chối và chỉ rõ lỗi.
+- [ ] Tên sheet được lưu đúng trong History và audit log.
 - [ ] Thiếu từng cột bắt buộc bị từ chối và chỉ rõ dòng/cột.
 - [ ] `source_product_id` chữ, âm, 0 hoặc rỗng bị từ chối.
 - [ ] `suggested_product_id` chữ, âm, 0 hoặc rỗng bị từ chối.
@@ -112,4 +115,3 @@ Ghi kết quả mỗi case: `PASS`, `FAIL`, `BLOCKED`, kèm POS, thời gian, da
 - [ ] Xác nhận cùng dataset version trên cả 3 POS.
 - [ ] Có phương án rollback extension v1.1.0 và dataset version cũ.
 - [ ] Stakeholder ký xác nhận trước rollout 25 POS.
-

@@ -18,7 +18,5 @@ await cp(path.join(root, "assets"), path.join(output, "assets"), { recursive: tr
 await writeFile(path.join(output, "config.js"), `window.CIRCA_ADMIN_CONFIG = Object.freeze(${JSON.stringify({
   supabaseUrl,
   supabasePublishableKey: publishableKey,
-  expectedSheetNames: ["consultation_rules", "Sheet2"],
 }, null, 2)});\n`);
 console.log(`Admin Portal build hoàn tất: ${output}`);
-

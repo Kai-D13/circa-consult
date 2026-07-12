@@ -90,12 +90,7 @@ Rollback:
 
 ## 3. Schema Excel
 
-Tên sheet được chấp nhận:
-
-```text
-consultation_rules
-Sheet2
-```
+Tên sheet không bị ràng buộc. Nếu file có một sheet, portal tự chọn. Nếu file có nhiều sheet, Admin chọn sheet cần import; tên sheet được lưu trong History và audit log.
 
 Cột bắt buộc:
 

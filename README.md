@@ -11,7 +11,7 @@ Chrome Extension Manifest V3 đồng bộ master tư vấn từ Supabase, exact-
 
 ## Dataset Excel
 
-Sheet `consultation_rules` hoặc `Sheet2`. Các cột bắt buộc:
+Tên sheet không bị ràng buộc. File có một sheet sẽ được chọn tự động; file có nhiều sheet sẽ hiển thị lựa chọn cho Admin. Các cột bắt buộc trong sheet được chọn:
 
 ```text
 source_product_id

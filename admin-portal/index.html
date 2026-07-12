@@ -59,7 +59,12 @@
             <article id="import" class="card import-card">
               <div class="card-heading"><div><span class="section-icon blue">⇧</span><div><h2>Import dataset mới</h2><p>Tạo bản nháp trước khi phát hành</p></div></div></div>
               <label class="file-drop" for="dataset-file"><span class="upload-icon">⇧</span><strong>Chọn file Excel</strong><span>Kéo thả hoặc bấm để chọn .xlsx / .xls</span><input id="dataset-file" type="file" accept=".xlsx,.xls"></label>
-              <p class="hint">Sheet chấp nhận: <code>consultation_rules</code> hoặc <code>Sheet2</code>.</p>
+              <div id="sheet-selector" class="sheet-selector hidden">
+                <label for="sheet-select">Chọn sheet cần import</label>
+                <select id="sheet-select"><option value="">-- Chọn sheet --</option></select>
+                <span id="sheet-hint" class="hint"></span>
+              </div>
+              <p class="hint">Nếu file có nhiều sheet, hệ thống sẽ yêu cầu chọn sheet cần import. Tên sheet không bị ràng buộc.</p>
               <div id="validation-summary" class="validation empty">Chưa chọn file.</div>
               <div class="actions end-actions"><button id="clear-file" class="secondary" disabled>Xóa file</button><button id="save-draft" disabled>Lưu bản nháp</button></div>
             </article>

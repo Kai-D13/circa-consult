@@ -125,19 +125,40 @@
     return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, "0")).join("");
   }
 
-  async function handleFile(file) {
-    const buffer = await file.arrayBuffer();
-    const workbook = XLSX.read(buffer, { type: "array" });
-    const sheetName = config.expectedSheetNames.find(name => workbook.SheetNames.includes(name));
-    if (!sheetName) throw new Error(`Không tìm thấy sheet ${config.expectedSheetNames.join(" hoặc ")}.`);
-    const rawRows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: "", raw: false });
+  async function processSheet(sheetName) {
+    const context = state.workbookContext;
+    if (!context || !sheetName || !context.workbook.Sheets[sheetName]) return;
+    const rawRows = XLSX.utils.sheet_to_json(context.workbook.Sheets[sheetName], { defval: "", raw: false });
     const rules = validateRows(rawRows);
-    state.pending = { filename: file.name, checksum: await digest(buffer), sheetName, rules };
+    state.pending = { filename: context.file.name, checksum: context.checksum, sheetName, rules };
     $("validation-summary").className = "validation ok";
-    $("validation-summary").textContent = `Hợp lệ: ${rules.length} rule · Sheet ${sheetName}\nSHA-256: ${state.pending.checksum}`;
+    $("validation-summary").textContent = `Hợp lệ: ${rules.length} rule · Sheet: ${sheetName}\nSHA-256: ${context.checksum}`;
     $("save-draft").disabled = false;
     $("clear-file").disabled = false;
     renderPreview(rules);
+  }
+
+  async function handleFile(file) {
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: "array" });
+    if (!workbook.SheetNames.length) throw new Error("File Excel không có sheet nào.");
+    state.workbookContext = { file, workbook, checksum: await digest(buffer) };
+    const selector = $("sheet-select");
+    selector.replaceChildren(new Option("-- Chọn sheet --", ""));
+    workbook.SheetNames.forEach(name => selector.add(new Option(name, name)));
+    $("sheet-selector").classList.toggle("hidden", workbook.SheetNames.length === 1);
+    $("sheet-hint").textContent = `File có ${workbook.SheetNames.length} sheet: ${workbook.SheetNames.join(", ")}`;
+    $("clear-file").disabled = false;
+    if (workbook.SheetNames.length === 1) {
+      selector.value = workbook.SheetNames[0];
+      await processSheet(workbook.SheetNames[0]);
+    } else {
+      state.pending = null;
+      $("validation-summary").className = "validation warning";
+      $("validation-summary").textContent = `File có ${workbook.SheetNames.length} sheet. Hãy chọn sheet cần import.`;
+      $("save-draft").disabled = true;
+      $("preview-card").classList.add("hidden");
+    }
   }
 
   function renderPreview(rules) {
@@ -154,11 +175,14 @@
 
   function clearPending() {
     state.pending = null;
+    state.workbookContext = null;
     $("dataset-file").value = "";
     $("validation-summary").className = "validation empty";
     $("validation-summary").textContent = "Chưa chọn file.";
     $("save-draft").disabled = true;
     $("clear-file").disabled = true;
+    $("sheet-selector").classList.add("hidden");
+    $("sheet-select").innerHTML = '<option value="">-- Chọn sheet --</option>';
     $("preview-card").classList.add("hidden");
   }
 
@@ -169,6 +193,7 @@
       method: "POST",
       body: JSON.stringify({
         p_source_filename: state.pending.filename,
+        p_source_sheet_name: state.pending.sheetName,
         p_rules: state.pending.rules,
         p_checksum: state.pending.checksum,
       }),
@@ -181,7 +206,7 @@
   async function loadDashboard() {
     const [current, versions] = await Promise.all([
       request("/rest/v1/rpc/get_latest_dataset", { method: "POST", body: "{}" }),
-      request("/rest/v1/dataset_versions?select=id,version,status,source_filename,row_count,created_by_email,created_at,published_by_email,published_at&order=created_at.desc", { method: "GET" }),
+      request("/rest/v1/dataset_versions?select=id,version,status,source_filename,source_sheet_name,row_count,created_by_email,created_at,published_by_email,published_at&order=created_at.desc", { method: "GET" }),
     ]);
     state.versions = versions;
     renderCurrent(current);
@@ -195,7 +220,7 @@
   }
 
   function renderVersions(versions) {
-    $("versions-table").innerHTML = `<thead><tr><th>Version</th><th>Trạng thái</th><th>File</th><th>Rules</th><th>Người tạo</th><th>Published</th><th>Thao tác</th></tr></thead><tbody>${versions.map(v => `<tr><td>${escapeHtml(v.version)}</td><td><span class="badge ${v.status}">${escapeHtml(v.status)}</span></td><td>${escapeHtml(v.source_filename)}</td><td>${v.row_count}</td><td>${escapeHtml(v.created_by_email || "—")}</td><td>${v.published_at ? escapeHtml(new Date(v.published_at).toLocaleString("vi-VN")) : "—"}</td><td>${v.status === "published" ? "Đang áp dụng" : `<button data-publish="${v.id}" class="${v.status === "archived" ? "secondary" : ""}">${v.status === "archived" ? "Rollback" : "Publish"}</button>`}</td></tr>`).join("")}</tbody>`;
+    $("versions-table").innerHTML = `<thead><tr><th>Version</th><th>Trạng thái</th><th>File</th><th>Sheet</th><th>Rules</th><th>Người tạo</th><th>Published</th><th>Thao tác</th></tr></thead><tbody>${versions.map(v => `<tr><td>${escapeHtml(v.version)}</td><td><span class="badge ${v.status}">${escapeHtml(v.status)}</span></td><td>${escapeHtml(v.source_filename)}</td><td>${escapeHtml(v.source_sheet_name || "—")}</td><td>${v.row_count}</td><td>${escapeHtml(v.created_by_email || "—")}</td><td>${v.published_at ? escapeHtml(new Date(v.published_at).toLocaleString("vi-VN")) : "—"}</td><td>${v.status === "published" ? "Đang áp dụng" : `<button data-publish="${v.id}" class="${v.status === "archived" ? "secondary" : ""}">${v.status === "archived" ? "Rollback" : "Publish"}</button>`}</td></tr>`).join("")}</tbody>`;
   }
 
   async function publish(id) {
@@ -227,6 +252,17 @@
       $("validation-summary").textContent = error.message;
       $("save-draft").disabled = true;
       $("clear-file").disabled = false;
+    });
+  };
+  $("sheet-select").onchange = event => {
+    const sheetName = event.target.value;
+    if (!sheetName) return;
+    processSheet(sheetName).catch(error => {
+      state.pending = null;
+      $("validation-summary").className = "validation error";
+      $("validation-summary").textContent = `Sheet "${sheetName}" không hợp lệ: ${error.message}`;
+      $("save-draft").disabled = true;
+      $("preview-card").classList.add("hidden");
     });
   };
   $("versions-table").onclick = event => {
