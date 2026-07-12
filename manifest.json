@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Circa POS - Gợi ý tư vấn bán kèm",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Đồng bộ dữ liệu tư vấn tập trung, nhận diện sản phẩm theo product ID và chỉ gợi ý sản phẩm còn tồn tại POS.",
   "permissions": ["storage", "alarms"],
   "host_permissions": [

@@ -213,7 +213,7 @@
   }
 
   $("login").onclick = () => authenticate("login").catch(handleError);
-  $("signup").onclick = () => authenticate("signup").catch(handleError);
+  $("signup")?.addEventListener("click", () => authenticate("signup").catch(handleError));
   $("logout").onclick = () => saveSession(null);
   $("refresh").onclick = () => loadDashboard().catch(handleError);
   $("clear-file").onclick = clearPending;
@@ -237,4 +237,3 @@
   restoreSession();
   renderAuth();
 })();
-

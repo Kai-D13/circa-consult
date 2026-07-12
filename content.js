@@ -147,7 +147,7 @@
   });
   sendMessage({ type: "GET_DATASET" }).then(result => {
     dataset = result.consultationDataset || null;
-    if (!dataset) sendMessage({ type: "SYNC_DATASET" }).then(sync => {
+    sendMessage({ type: "SYNC_DATASET" }).then(sync => {
       if (sync?.ok) dataset = sync.dataset; lastCartSignature = ""; scheduleScan();
     });
     attachCartObserver();

@@ -1,10 +1,12 @@
 node_modules/
 dist/
 coverage/
+tmp/
 .env
 .env.*
 !.env.example
 supabase/.temp/
 ~$*.xlsx
 *.zip
-
+simlified.jpg
+1783867652165_277047792803717156_1816854024308610250_99ced2a237882405fb964b6a22762205.jpg

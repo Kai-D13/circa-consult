@@ -37,7 +37,7 @@ npm test
 powershell -ExecutionPolicy Bypass -File scripts\package-extension.ps1
 ```
 
-Load unpacked từ `dist\extension`, hoặc dùng ZIP trong `dist` để bàn giao.
+Load unpacked từ `dist\extension`, hoặc dùng ZIP v1.2.1 trong `dist` để bàn giao.
 
 ## Admin Portal local
 

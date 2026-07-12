@@ -3,75 +3,83 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Circa – Quản trị dữ liệu tư vấn</title>
+  <title>Circa - Quản trị dữ liệu tư vấn</title>
+  <link rel="icon" type="image/png" href="assets/circa-icon.png">
+  <link rel="apple-touch-icon" href="assets/circa-icon.png">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header class="topbar">
-    <div>
-      <h1>Circa – Dữ liệu tư vấn bán kèm</h1>
-      <p>Import, kiểm tra, phát hành và khôi phục dataset cho toàn bộ POS.</p>
-    </div>
-    <div id="user-area" class="user-area hidden">
-      <span id="user-email"></span>
-      <button id="logout" class="secondary">Đăng xuất</button>
-    </div>
-  </header>
+  <div class="portal-shell">
+    <aside class="sidebar">
+      <div class="brand"><img src="assets/circa-logo.jpg" alt="CIRCA"></div>
+      <nav aria-label="Điều hướng chính">
+        <a class="nav-item" href="#overview"><span class="nav-icon">▦</span><span>Tổng quan</span></a>
+        <a class="nav-item active" href="#import"><span class="nav-icon">⇧</span><span>Quản lý dataset</span></a>
+        <a class="nav-item" href="#history"><span class="nav-icon">↶</span><span>Lịch sử phiên bản</span></a>
+      </nav>
+      <div class="sidebar-footer"><span class="status-dot"></span> Hệ thống hoạt động</div>
+    </aside>
 
-  <main>
-    <section id="auth-card" class="card auth-card">
-      <h2>Đăng nhập Admin</h2>
-      <label>Email<input id="email" type="email" autocomplete="username" value="hoangvudn96@gmail.com"></label>
-      <label>Mật khẩu<input id="password" type="password" autocomplete="current-password"></label>
-      <div class="actions">
-        <button id="login">Đăng nhập</button>
-        <button id="signup" class="secondary">Tạo tài khoản lần đầu</button>
-      </div>
-      <p class="hint">Chỉ email trong allowlist mới có quyền tạo draft và publish.</p>
-    </section>
-
-    <div id="app" class="hidden">
-      <section class="grid">
-        <article class="card status-card">
-          <div class="section-title">
-            <h2>Dataset đang áp dụng</h2>
-            <button id="refresh" class="secondary">Làm mới</button>
-          </div>
-          <dl id="current-status"><dt>Trạng thái</dt><dd>Đang tải…</dd></dl>
-        </article>
-
-        <article class="card">
-          <h2>Import dataset mới</h2>
-          <input id="dataset-file" type="file" accept=".xlsx,.xls">
-          <p class="hint">Sheet chấp nhận: <code>consultation_rules</code> hoặc <code>Sheet2</code>.</p>
-          <div id="validation-summary" class="validation empty">Chưa chọn file.</div>
-          <div class="actions">
-            <button id="save-draft" disabled>Lưu bản nháp</button>
-            <button id="clear-file" class="secondary" disabled>Xóa file</button>
-          </div>
-        </article>
-      </section>
-
-      <section id="preview-card" class="card hidden">
-        <div class="section-title">
-          <h2>Xem trước</h2>
-          <span id="preview-count"></span>
+    <div class="page-shell">
+      <header class="appbar">
+        <div class="appbar-title"><span class="dataset-icon">▱</span><strong>Dữ liệu tư vấn bán kèm</strong></div>
+        <div id="user-area" class="user-area hidden">
+          <div class="user-meta"><span id="user-email"></span><small>Quản trị viên</small></div>
+          <div class="avatar" aria-hidden="true">A</div>
+          <button id="logout" class="icon-button" title="Đăng xuất" aria-label="Đăng xuất">↪</button>
         </div>
-        <div class="table-wrap"><table id="preview-table"></table></div>
-      </section>
+      </header>
 
-      <section class="card">
-        <div class="section-title">
-          <h2>Lịch sử phiên bản</h2>
-          <span class="hint">Publish một version sẽ tự archive version hiện tại.</span>
+      <main>
+        <section id="auth-card" class="auth-panel card">
+          <img src="assets/circa-logo.jpg" alt="CIRCA" class="auth-logo">
+          <div class="eyebrow">ADMIN PORTAL</div>
+          <h1>Đăng nhập quản trị</h1>
+          <p class="subtitle">Quản lý và phát hành dữ liệu tư vấn cho toàn bộ hệ thống POS.</p>
+          <label>Email<input id="email" type="email" autocomplete="username" value="hoangvudn96@gmail.com"></label>
+          <label>Mật khẩu<input id="password" type="password" autocomplete="current-password"></label>
+          <div class="actions auth-actions">
+            <button id="login">Đăng nhập</button>
+          </div>
+          <p class="hint">Chỉ tài khoản nằm trong danh sách Admin được phép tạo và phát hành dataset.</p>
+        </section>
+
+        <div id="app" class="hidden">
+          <section id="overview" class="page-heading">
+            <div><div class="eyebrow">QUẢN LÝ TẬP TRUNG</div><h1>Dataset tư vấn bán kèm</h1><p>Import, kiểm tra và phát hành dữ liệu đồng bộ đến toàn bộ máy POS Circa.</p></div>
+            <button id="refresh" class="secondary refresh-button"><span>↻</span> Làm mới</button>
+          </section>
+
+          <section class="summary-grid">
+            <article class="card current-card">
+              <div class="card-heading"><div><span class="section-icon orange">✓</span><div><h2>Dataset đang áp dụng</h2><p>Dữ liệu production trên toàn hệ thống</p></div></div><span class="live-badge"><span></span> LIVE</span></div>
+              <dl id="current-status"><dt>Trạng thái</dt><dd>Đang tải...</dd></dl>
+            </article>
+
+            <article id="import" class="card import-card">
+              <div class="card-heading"><div><span class="section-icon blue">⇧</span><div><h2>Import dataset mới</h2><p>Tạo bản nháp trước khi phát hành</p></div></div></div>
+              <label class="file-drop" for="dataset-file"><span class="upload-icon">⇧</span><strong>Chọn file Excel</strong><span>Kéo thả hoặc bấm để chọn .xlsx / .xls</span><input id="dataset-file" type="file" accept=".xlsx,.xls"></label>
+              <p class="hint">Sheet chấp nhận: <code>consultation_rules</code> hoặc <code>Sheet2</code>.</p>
+              <div id="validation-summary" class="validation empty">Chưa chọn file.</div>
+              <div class="actions end-actions"><button id="clear-file" class="secondary" disabled>Xóa file</button><button id="save-draft" disabled>Lưu bản nháp</button></div>
+            </article>
+          </section>
+
+          <section id="preview-card" class="card hidden">
+            <div class="section-title"><div><h2>Xem trước dữ liệu</h2><p>Kiểm tra chính xác trước khi lưu bản nháp.</p></div><span id="preview-count" class="count-chip"></span></div>
+            <div class="table-wrap"><table id="preview-table"></table></div>
+          </section>
+
+          <section id="history" class="card history-card">
+            <div class="section-title"><div><h2>Lịch sử phiên bản</h2><p>Publish version mới sẽ tự động lưu trữ version đang chạy.</p></div><span class="history-icon">↶</span></div>
+            <div class="table-wrap"><table id="versions-table"></table></div>
+          </section>
         </div>
-        <div class="table-wrap"><table id="versions-table"></table></div>
-      </section>
+
+        <div id="toast" role="status" aria-live="polite"></div>
+      </main>
     </div>
-
-    <div id="toast" role="status" aria-live="polite"></div>
-  </main>
-
+  </div>
   <script src="config.js"></script>
   <script src="xlsx.full.min.js"></script>
   <script src="app.js"></script>
