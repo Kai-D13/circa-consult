@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="index,follow">
+  <title>Chính sách quyền riêng tư | Circa POS</title>
+  <link rel="stylesheet" href="privacy.css">
+</head>
+<body>
+  <main class="page"><article class="card">
+    <h1>Chính sách quyền riêng tư</h1>
+    <p class="meta">Sản phẩm: Circa POS - Gợi ý tư vấn bán kèm · Đơn vị vận hành: Circa Pharmacy · Cập nhật: 12/07/2026</p>
+    <p>Tiện ích này chỉ phục vụ nhân viên Circa trên hệ thống bán hàng <code>pos.v2.circa.vn</code>, nhằm hiển thị gợi ý sản phẩm bán kèm và loại bỏ gợi ý không còn tồn kho tại cửa hàng đang thao tác.</p>
+    <h2>Dữ liệu được xử lý</h2>
+    <p>Tiện ích xử lý product ID và tên sản phẩm đang có trong giỏ hàng; mã POS và vị trí bán hàng lưu trên trình duyệt POS; phiên đăng nhập <code>session_token</code> hiện có để xác thực yêu cầu kiểm tra tồn kho với API Circa; cùng dataset tư vấn và trạng thái đồng bộ lưu cục bộ bằng Chrome Storage.</p>
+    <p>Tiện ích không thu thập thông tin thanh toán, hồ sơ bệnh lý, nội dung trao đổi hoặc thông tin nhận dạng của khách hàng.</p>
+    <h2>Mục đích và luồng sử dụng</h2>
+    <p>Product ID trong giỏ hàng được đối chiếu cục bộ với dataset tư vấn. Khi có sản phẩm gợi ý, tiện ích gửi product ID gợi ý và phiên xác thực hiện tại trực tiếp đến <code>api.v2.circa.vn</code> qua HTTPS để lấy giá và tồn kho. Session token không được gửi đến Supabase. Supabase chỉ cung cấp dataset tư vấn tập trung đã được Admin Circa phát hành.</p>
+    <h2>Lưu trữ, chia sẻ và thời hạn</h2>
+    <p>Dataset và trạng thái đồng bộ được lưu cục bộ trong Chrome Storage để tiện ích hoạt động. Dữ liệu này được thay thế khi có dataset mới và bị xóa khi người dùng gỡ tiện ích hoặc xóa dữ liệu extension. Circa Pharmacy không bán dữ liệu, không dùng dữ liệu cho quảng cáo và không chia sẻ dữ liệu để bên thứ ba sử dụng cho mục đích độc lập. Supabase chỉ đóng vai trò nhà cung cấp hạ tầng để phân phối dataset tư vấn đã publish; session token và nội dung giỏ hàng không được gửi đến Supabase.</p>
+    <h2>Bảo mật và quyền của người dùng</h2>
+    <p>Các kết nối mạng sử dụng HTTPS. Tiện ích chỉ chạy trên các URL bán hàng Circa đã khai báo trong manifest. Người dùng có thể ngừng xử lý dữ liệu bằng cách tắt hoặc gỡ tiện ích khỏi Chrome.</p>
+    <h2>Liên hệ</h2>
+    <p>Nếu có câu hỏi hoặc yêu cầu liên quan đến dữ liệu, vui lòng liên hệ <a href="mailto:hoangvudn96@gmail.com">hoangvudn96@gmail.com</a>.</p>
+    <footer>Circa Pharmacy</footer>
+  </article></main>
+</body>
+</html>

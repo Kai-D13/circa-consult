@@ -11,7 +11,7 @@ if (!publishableKey.startsWith("sb_publishable_")) throw new Error("CIRCA_SUPABA
 
 await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
-for (const file of ["index.html", "styles.css", "app.js", "xlsx.full.min.js"]) {
+for (const file of ["index.html", "privacy.html", "privacy.css", "styles.css", "app.js", "xlsx.full.min.js"]) {
   await writeFile(path.join(output, file), await readFile(path.join(root, file)));
 }
 await cp(path.join(root, "assets"), path.join(output, "assets"), { recursive: true });

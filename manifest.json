@@ -1,8 +1,14 @@
 {
   "manifest_version": 3,
   "name": "Circa POS - Gợi ý tư vấn bán kèm",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Đồng bộ dữ liệu tư vấn tập trung, nhận diện sản phẩm theo product ID và chỉ gợi ý sản phẩm còn tồn tại POS.",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
   "permissions": ["storage", "alarms"],
   "host_permissions": [
     "https://pos.v2.circa.vn/*",
@@ -12,7 +18,12 @@
   "background": { "service_worker": "background.js" },
   "action": {
     "default_title": "Trạng thái dữ liệu tư vấn",
-    "default_popup": "popup.html"
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png"
+    }
   },
   "options_page": "options.html",
   "content_scripts": [
