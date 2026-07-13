@@ -1,6 +1,6 @@
 # Circa POS – Gợi ý tư vấn bán kèm
 
-Chrome Extension Manifest V3 đồng bộ master tư vấn từ Supabase, exact-match sản phẩm trong giỏ theo `product_id`, kiểm tra tồn kho theo sales location của POS và chỉ hiển thị sản phẩm bán được.
+Chrome Extension Manifest V3 đồng bộ master tư vấn từ Supabase, exact-match sản phẩm trong giỏ theo `product_id`, kiểm tra tồn kho theo sales location của POS và hiển thị rõ sản phẩm có thể bán hoặc đã hết tồn.
 
 ## Cấu trúc
 
@@ -37,7 +37,7 @@ npm test
 powershell -ExecutionPolicy Bypass -File scripts\package-extension.ps1
 ```
 
-Load unpacked từ `dist\extension`, hoặc dùng ZIP v1.2.1 trong `dist` để bàn giao.
+Load unpacked từ `dist\extension`, hoặc dùng ZIP cùng version manifest trong `dist` để bàn giao.
 
 ## Admin Portal local
 
@@ -51,7 +51,7 @@ Admin đăng nhập bằng Supabase Auth. Chỉ email trong `admin_allowlist` đ
 
 ## Quy tắc tồn kho
 
-Suggestion chỉ hiển thị khi `/v2/product` trả ít nhất một stock row thỏa:
+Suggestion được đánh dấu có thể bán khi `/v2/product` trả ít nhất một stock row thỏa:
 
 ```text
 location_type = SALES
@@ -59,5 +59,7 @@ location_id = pos_config.auto_put_location
 quantity > 0
 final_price > 0
 ```
+
+Giá được map theo `unit_id` của `default_sale_unit`; nếu API không đánh dấu default thì fallback về unit có giá hợp lệ đầu tiên. `availableQuantity` luôn là tổng tồn theo base unit. Suggestion hết tồn vẫn xuất hiện với trạng thái cảnh báo thay vì bị ẩn.
 
 Token POS được đọc từ cookie `session_token`, gửi thẳng tới Circa API qua service worker và không lưu vào `chrome.storage` hay Supabase.

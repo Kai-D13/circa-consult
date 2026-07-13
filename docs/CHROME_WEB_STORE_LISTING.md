@@ -28,7 +28,8 @@ Chức năng chính:
 - Đồng bộ dataset tư vấn tập trung khi Chrome khởi động, khi mở trang POS và định kỳ 15 phút.
 - Nhận diện sản phẩm trong giỏ hàng theo product ID.
 - Hiển thị nội dung tư vấn bán kèm ngay trên màn hình POS.
-- Chỉ hiển thị sản phẩm gợi ý có giá hợp lệ và còn tồn tại cửa hàng hiện tại.
+- Hiển thị tổng tồn base unit, đơn vị bán mặc định và đúng giá của đơn vị đó.
+- Cảnh báo rõ khi sản phẩm gợi ý hết tồn hoặc chưa có giá hợp lệ tại cửa hàng hiện tại.
 - Không yêu cầu nhân viên POS tự import hoặc cấu hình dataset.
 
 Tiện ích chỉ hoạt động trên hệ thống Circa POS và dành cho hoạt động nội bộ của Circa Pharmacy.

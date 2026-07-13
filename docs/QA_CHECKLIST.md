@@ -60,12 +60,16 @@ Ghi kết quả mỗi case: `PASS`, `FAIL`, `BLOCKED`, kèm POS, thời gian, da
 ## D. Stock-aware suggestion
 
 - [ ] Product `13720` tại POS test trả quantity `1` và được hiển thị khi là suggestion.
-- [ ] Product `2001395` trả `stock_details: []` và không hiển thị.
-- [ ] Stock ở location khác `auto_put_location` không hiển thị.
-- [ ] `location_type` khác `SALES` không hiển thị.
-- [ ] `quantity = 0` không hiển thị dù `on_hand_qty > 0`.
-- [ ] Có tồn nhưng `final_price <= 0` không hiển thị.
+- [ ] Product `2001395` trả `stock_details: []` và hiển thị trạng thái `Hết tồn tại POS này`.
+- [ ] Stock ở location khác `auto_put_location` không được đánh dấu có thể bán.
+- [ ] `location_type` khác `SALES` không được cộng vào tổng tồn.
+- [ ] `quantity = 0` hiển thị hết tồn dù `on_hand_qty > 0`.
+- [ ] Có tồn nhưng `final_price <= 0` hiển thị chưa có giá hợp lệ.
 - [ ] Nhiều lot SALES được cộng `availableQuantity` đúng.
+- [ ] Product `111908` hiển thị tổng tồn base unit `60`, đơn vị `hộp`, giá default-unit `189.000 đ`.
+- [ ] Giá unit `viên` `6.300 đ` không bị gắn nhầm cho unit `hộp`.
+- [ ] Sản phẩm chỉ có một unit nhưng `default_sale_unit=false` vẫn fallback đúng unit/giá.
+- [ ] Default unit thiếu giá không lấy nhầm giá của unit khác.
 - [ ] Batch nhiều suggested IDs chỉ tạo một Product API request.
 - [ ] Cache tồn 60 giây giảm request lặp.
 - [ ] Sau 60 giây tồn được kiểm tra lại.
@@ -76,9 +80,9 @@ Ghi kết quả mỗi case: `PASS`, `FAIL`, `BLOCKED`, kèm POS, thời gian, da
 
 - [ ] Thiếu cookie `session_token` không làm hỏng POS.
 - [ ] Token hết hạn/401 hiển thị cảnh báo phù hợp.
-- [ ] API 403 không retry liên tục.
+- [ ] API 401/403 dừng retry ở background và hiển thị cảnh báo phiên đăng nhập.
 - [ ] API 500 không hiển thị suggestion chưa xác nhận tồn.
-- [ ] API timeout sau khoảng 5 giây.
+- [ ] API/network lỗi retry tối đa 2 lần ở background rồi hiển thị cảnh báo.
 - [ ] Supabase 4xx/5xx giữ cache cũ.
 - [ ] Token không xuất hiện trong `chrome.storage.local`.
 - [ ] Token không xuất hiện trong console log.
@@ -93,6 +97,10 @@ Ghi kết quả mỗi case: `PASS`, `FAIL`, `BLOCKED`, kèm POS, thời gian, da
 - [ ] Thêm/xóa liên tục 10 sản phẩm không treo UI.
 - [ ] Cart 20 sản phẩm phản hồi trong giới hạn chấp nhận.
 - [ ] Popup scroll được trên màn hình POS thực tế.
+- [ ] Popup được neo trong sidebar ngay trên footer và tự gắn lại sau React remount.
+- [ ] Popup fallback về góc phải màn hình nếu sidebar chưa render.
+- [ ] Remove rồi add lại cùng product ID kích hoạt scan mới không chờ 60 giây.
+- [ ] Lỗi tạm thời được thử lại và không biến mất im lặng.
 - [ ] Tiếng Việt hiển thị đúng UTF-8.
 
 ## G. Regression POS

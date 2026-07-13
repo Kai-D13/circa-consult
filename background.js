@@ -8,7 +8,8 @@ const CONFIG = Object.freeze({
   syncAlarm: "circa-consult-sync",
   syncMinutes: 15,
   stockCacheTtlMs: 60_000,
-  requestTimeoutMs: 5_000,
+  requestTimeoutMs: 8_000,
+  stockRequestAttempts: 2,
 });
 
 const stockCache = new Map();
@@ -56,6 +57,46 @@ function normalizeIds(values) {
   return [...new Set((values || []).map(Number).filter(id => Number.isInteger(id) && id > 0))];
 }
 
+function wait(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+async function fetchProductItems(productIds, sessionToken) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= CONFIG.stockRequestAttempts; attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), CONFIG.requestTimeoutMs);
+    try {
+      const response = await fetch(CONFIG.circaProductApi, {
+        method: "POST",
+        headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
+        body: JSON.stringify({ product_ids: productIds, get_all_price: true }),
+        signal: controller.signal,
+      });
+      if (response.status === 401 || response.status === 403) {
+        const error = new Error("Phiên POS hết hạn. Vui lòng đăng nhập lại.");
+        error.code = "UNAUTHORIZED";
+        throw error;
+      }
+      if (!response.ok) throw new Error(`Circa Product API HTTP ${response.status}`);
+      const body = await response.json();
+      if (!body?.success || !Array.isArray(body?.data?.products)) throw new Error("Circa Product API trả dữ liệu không hợp lệ.");
+      return body.data.products;
+    } catch (error) {
+      if (error.code === "UNAUTHORIZED") throw error;
+      lastError = error;
+      if (attempt < CONFIG.stockRequestAttempts) await wait(350 * attempt);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  if (lastError?.name === "AbortError") {
+    const error = new Error("Kiểm tra tồn kho quá thời gian.");
+    error.code = "TIMEOUT";
+    throw error;
+  }
+  if (lastError) lastError.code = lastError.code || "API_ERROR";
+  throw lastError || Object.assign(new Error("Không kiểm tra được tồn kho."), { code: "API_ERROR" });
+}
+
 async function fetchStock({ productIds, sessionToken, posId, salesLocationId }) {
   const ids = normalizeIds(productIds);
   if (!ids.length) return { ok: true, products: {} };
@@ -72,31 +113,16 @@ async function fetchStock({ productIds, sessionToken, posId, salesLocationId }) 
   });
 
   if (missing.length) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), CONFIG.requestTimeoutMs);
     try {
-      const response = await fetch(CONFIG.circaProductApi, {
-        method: "POST",
-        headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
-        body: JSON.stringify({ product_ids: missing, get_all_price: true }),
-        signal: controller.signal,
-      });
-      if (response.status === 401 || response.status === 403) {
-        return { ok: false, code: "UNAUTHORIZED", error: "Phiên POS hết hạn. Vui lòng đăng nhập lại." };
-      }
-      if (!response.ok) throw new Error(`Circa Product API HTTP ${response.status}`);
-      const body = await response.json();
-      if (!body?.success || !Array.isArray(body?.data?.products)) throw new Error("Circa Product API trả dữ liệu không hợp lệ.");
-      const returned = new Map(body.data.products.map(item => [Number(item.product?.product_id), item]));
+      const items = await fetchProductItems(missing, sessionToken);
+      const returned = new Map(items.map(item => [Number(item.product?.product_id), item]));
       missing.forEach(id => {
         const value = CIRCA_CORE.evaluateStock(returned.get(id), id, salesLocationId);
         result[id] = value;
         stockCache.set(`${posId}:${id}`, { value, expiresAt: now + CONFIG.stockCacheTtlMs });
       });
     } catch (error) {
-      return { ok: false, code: error.name === "AbortError" ? "TIMEOUT" : "API_ERROR", error: error.name === "AbortError" ? "Kiểm tra tồn kho quá thời gian." : error.message };
-    } finally {
-      clearTimeout(timer);
+      return { ok: false, code: error.code || "API_ERROR", error: error.message };
     }
   }
   return { ok: true, products: result };
