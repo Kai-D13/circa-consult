@@ -97,8 +97,10 @@ Ghi kết quả mỗi case: `PASS`, `FAIL`, `BLOCKED`, kèm POS, thời gian, da
 - [ ] Thêm/xóa liên tục 10 sản phẩm không treo UI.
 - [ ] Cart 20 sản phẩm phản hồi trong giới hạn chấp nhận.
 - [ ] Popup scroll được trên màn hình POS thực tế.
-- [ ] Popup được neo trong sidebar ngay trên footer và tự gắn lại sau React remount.
-- [ ] Popup fallback về góc phải màn hình nếu sidebar chưa render.
+- [ ] Popup được neo ở góc dưới-phải vùng giỏ hàng chứa `#table-order-items-offline` và tự gắn lại sau React remount.
+- [ ] Popup không che hoặc thay đổi vùng nút Hủy/Thanh toán ở sidebar bên phải.
+- [ ] Popup fallback về góc phải màn hình nếu vùng giỏ hàng chưa render.
+- [ ] Khi API phản hồi chậm hơn chu kỳ quét dự phòng, popup vẫn thoát trạng thái loading và hiển thị kết quả hoặc cảnh báo timeout.
 - [ ] Remove rồi add lại cùng product ID kích hoạt scan mới không chờ 60 giây.
 - [ ] Lỗi tạm thời được thử lại và không biến mất im lặng.
 - [ ] Tiếng Việt hiển thị đúng UTF-8.

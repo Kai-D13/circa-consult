@@ -139,8 +139,11 @@ chrome.runtime.onStartup.addListener(() => {
 chrome.alarms.onAlarm.addListener(alarm => { if (alarm.name === CONFIG.syncAlarm) syncDataset(); });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message?.type === "SYNC_DATASET") { syncDataset().then(sendResponse); return true; }
-  if (message?.type === "GET_DATASET") { storageGet(["consultationDataset", "datasetSyncStatus"]).then(sendResponse); return true; }
-  if (message?.type === "CHECK_STOCK") { fetchStock(message.payload || {}).then(sendResponse); return true; }
+  const respond = promise => promise
+    .then(sendResponse)
+    .catch(error => sendResponse({ ok: false, code: error.code || "UNEXPECTED_ERROR", error: error.message || "Extension gặp lỗi không xác định." }));
+  if (message?.type === "SYNC_DATASET") { respond(syncDataset()); return true; }
+  if (message?.type === "GET_DATASET") { respond(storageGet(["consultationDataset", "datasetSyncStatus"])); return true; }
+  if (message?.type === "CHECK_STOCK") { respond(fetchStock(message.payload || {})); return true; }
   return false;
 });

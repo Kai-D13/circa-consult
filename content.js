@@ -3,7 +3,8 @@
   const TABLE_SELECTOR = "#table-order-items-offline";
   const PANEL_ID = "circa-consult-panel";
   const PRODUCT_NAME_SELECTORS = ["td:nth-child(2) p.font-semibold", "td:nth-child(2) [class*='font-semibold']"];
-  const FALLBACK_SCAN_MS = 10_000;
+  const FALLBACK_SCAN_MS = 3_000;
+  const MESSAGE_TIMEOUT_MS = 25_000;
   const MAX_UI_RETRIES = 2;
   let dataset = null;
   let tableObserver = null;
@@ -17,12 +18,28 @@
   let dismissedProductSignature = "";
   let minimized = false;
   let retryState = { signature: "", attempts: 0 };
+  let scanInFlight = false;
+  let queuedScan = false;
 
-  function sendMessage(message) {
-    return new Promise(resolve => chrome.runtime.sendMessage(message, response => {
-      if (chrome.runtime.lastError) resolve({ ok: false, error: chrome.runtime.lastError.message });
-      else resolve(response || { ok: false, error: "Extension không trả response." });
-    }));
+  function sendMessage(message, timeoutMs = MESSAGE_TIMEOUT_MS) {
+    return new Promise(resolve => {
+      let settled = false;
+      const finish = response => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(response);
+      };
+      const timer = setTimeout(() => finish({ ok: false, code: "MESSAGE_TIMEOUT", error: "Extension không nhận được phản hồi kiểm tra tồn kho đúng hạn." }), timeoutMs);
+      try {
+        chrome.runtime.sendMessage(message, response => {
+          if (chrome.runtime.lastError) finish({ ok: false, code: "MESSAGE_ERROR", error: chrome.runtime.lastError.message });
+          else finish(response || { ok: false, code: "EMPTY_RESPONSE", error: "Extension không trả response." });
+        });
+      } catch (error) {
+        finish({ ok: false, code: "MESSAGE_ERROR", error: error.message });
+      }
+    });
   }
   function readJsonStorage(key) {
     try { return JSON.parse(localStorage.getItem(key) || "null"); } catch (_) { return null; }
@@ -81,27 +98,21 @@
   function productSignature(products) {
     return products.map(item => item.productId).sort((a, b) => a - b).join(",");
   }
-  function findSidebarPlacement() {
-    const buttons = Array.from(document.querySelectorAll("button"));
-    const payment = buttons.find(button => normalizeText(button.textContent) === "thanh toán");
-    if (!payment) return null;
-    const footer = payment.closest("div");
-    if (!footer) return null;
-    const hasCancel = Array.from(footer.querySelectorAll("button")).some(button => normalizeText(button.textContent) === "hủy");
-    const form = hasCancel ? footer.closest("form") : null;
-    return form ? { form, footer } : null;
+  function findCartPlacement() {
+    const table = document.querySelector(TABLE_SELECTOR);
+    if (!table) return null;
+    const host = table.closest("form") || table.parentElement;
+    return host ? { host, table } : null;
   }
   function placePanel(panel) {
-    const placement = findSidebarPlacement();
+    const placement = findCartPlacement();
     if (placement) {
-      document.querySelectorAll("form.ccp-sidebar-host").forEach(form => {
-        if (form !== placement.form) form.classList.remove("ccp-sidebar-host");
+      document.querySelectorAll(".ccp-cart-host").forEach(host => {
+        if (host !== placement.host) host.classList.remove("ccp-cart-host");
       });
-      placement.form.classList.add("ccp-sidebar-host");
+      placement.host.classList.add("ccp-cart-host");
       panel.classList.remove("ccp-floating");
-      if (panel.parentElement !== placement.form || panel.nextElementSibling !== placement.footer) {
-        placement.form.insertBefore(panel, placement.footer);
-      }
+      if (panel.parentElement !== placement.host) placement.host.appendChild(panel);
       return;
     }
     panel.classList.add("ccp-floating");
@@ -118,7 +129,7 @@
   }
   function removePanel() {
     document.getElementById(PANEL_ID)?.remove();
-    document.querySelectorAll("form.ccp-sidebar-host").forEach(form => form.classList.remove("ccp-sidebar-host"));
+    document.querySelectorAll(".ccp-cart-host").forEach(host => host.classList.remove("ccp-cart-host"));
   }
   function bindPanel(panel, signature) {
     panel.querySelector(".ccp-close")?.addEventListener("click", () => {
@@ -180,9 +191,10 @@
     if (retryState.attempts >= MAX_UI_RETRIES) return;
     retryState.attempts += 1;
     clearTimeout(retryTimer);
-    retryTimer = setTimeout(() => scanCart(true), 1500 * retryState.attempts);
+    retryTimer = setTimeout(() => scanCart(true).catch(() => {}), 1500 * retryState.attempts);
   }
-  async function scanCart(force = false) {
+  async function executeScan(force = false) {
+    const revision = cartRevision;
     const products = extractCartProducts(document.querySelector(TABLE_SELECTOR));
     const signature = productSignature(products);
     const scanKey = `${location.pathname}|${signature}|${cartRevision}`;
@@ -215,7 +227,7 @@
       productIds: rules.map(rule => Number(rule.suggested_product_id)),
       sessionToken: readSessionToken(), posId: posConfig.pos_id, salesLocationId: posConfig.auto_put_location,
     }});
-    if (sequence !== requestSequence || scanKey !== lastScanKey) return;
+    if (sequence !== requestSequence || revision !== cartRevision) return;
     if (!stockResult?.ok) {
       const retryable = !["UNAUTHORIZED", "NO_SESSION"].includes(stockResult?.code);
       renderWarning(signature, `${stockResult?.error || "Không kiểm tra được tồn kho."}${retryable ? " Extension sẽ tự thử lại." : ""}`);
@@ -224,6 +236,22 @@
     }
     retryState = { signature, attempts: 0 };
     renderSuggestions(signature, rules, stockResult);
+  }
+  async function scanCart(force = false) {
+    if (scanInFlight) {
+      queuedScan = true;
+      return;
+    }
+    scanInFlight = true;
+    try {
+      await executeScan(force);
+    } finally {
+      scanInFlight = false;
+      if (queuedScan) {
+        queuedScan = false;
+        setTimeout(() => scanCart(true).catch(error => renderWarning("", `Extension gặp lỗi: ${error.message}`)), 0);
+      }
+    }
   }
   function scheduleScan() {
     clearTimeout(scanTimer);
@@ -271,6 +299,6 @@
   new MutationObserver(scheduleLayout).observe(document.documentElement, { childList: true, subtree: true });
   setInterval(ensureLayout, 1000);
   setInterval(() => {
-    if (observedTable) scanCart(true).catch(() => {});
+    if (observedTable && !scanInFlight) scanCart(false).catch(() => {});
   }, FALLBACK_SCAN_MS);
 })();
