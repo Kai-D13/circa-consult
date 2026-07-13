@@ -8,7 +8,8 @@
 #circa-consult-panel.ccp-minimized { width: min(300px, calc(100% - 8px)); }
 #circa-consult-panel .ccp-group { margin: 0 0 12px; }
 #circa-consult-panel .ccp-group:last-child { margin-bottom: 0; }
-#circa-consult-panel .ccp-group-title { padding-bottom: 6px; border-bottom: 1px solid #f3d1b3; color: #9a3412; font-weight: 700; }
+#circa-consult-panel .ccp-group-title { display: flex; align-items: flex-start; gap: 7px; padding-bottom: 6px; border-bottom: 1px solid #f3d1b3; color: #9a3412; font-weight: 700; }
+#circa-consult-panel .ccp-source-index { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 999px; background: #f27b21; color: #fff; font-size: 11px; line-height: 1; }
 #circa-consult-panel ul { margin: 7px 0 0; padding: 0; list-style: none; }
 #circa-consult-panel li { margin-bottom: 8px; padding: 9px; border: 1px solid #e5e7eb; border-radius: 8px; background: #fffaf5; }
 #circa-consult-panel li:last-child { margin-bottom: 0; }

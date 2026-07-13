@@ -99,6 +99,10 @@ Ghi kết quả mỗi case: `PASS`, `FAIL`, `BLOCKED`, kèm POS, thời gian, da
 - [ ] Popup scroll được trên màn hình POS thực tế.
 - [ ] Popup được neo ở góc dưới-phải vùng giỏ hàng chứa `#table-order-items-offline` và tự gắn lại sau React remount.
 - [ ] Popup không che hoặc thay đổi vùng nút Hủy/Thanh toán ở sidebar bên phải.
+- [ ] Nút thu gọn/mở rộng và đóng popup không submit form, reload trang hoặc làm mất sản phẩm trong đơn.
+- [ ] Popup chỉ hiển thị suggested product còn tồn và có giá bán hợp lệ; không render card hết tồn.
+- [ ] Nếu tất cả suggested product hết tồn, popup chỉ hiển thị một thông báo không còn gợi ý tồn kho.
+- [ ] Nhóm gợi ý hiển thị STT source giống cột `#` và sắp xếp theo thứ tự hiện tại trên giỏ hàng.
 - [ ] Popup fallback về góc phải màn hình nếu vùng giỏ hàng chưa render.
 - [ ] Khi API phản hồi chậm hơn chu kỳ quét dự phòng, popup vẫn thoát trạng thái loading và hiển thị kết quả hoặc cảnh báo timeout.
 - [ ] Remove rồi add lại cùng product ID kích hoạt scan mới không chờ 60 giây.

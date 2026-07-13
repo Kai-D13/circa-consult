@@ -50,9 +50,6 @@
     const value = raw.split("=").slice(1).join("=");
     try { return decodeURIComponent(value); } catch (_) { return value; }
   }
-  function normalizeText(value) {
-    return String(value || "").replace(/\s+/g, " ").trim().toLocaleLowerCase("vi-VN");
-  }
   function parseProductLabel(text) { return CIRCA_CORE.parseProductLabel(text); }
   function productFromRow(row) {
     for (const selector of PRODUCT_NAME_SELECTORS) {
@@ -67,27 +64,39 @@
   }
   function extractCartProducts(table) {
     const products = [];
-    table?.querySelectorAll("tbody tr").forEach(row => {
+    table?.querySelectorAll("tbody tr").forEach((row, index) => {
       const product = productFromRow(row);
-      if (product) products.push(product);
+      if (!product) return;
+      const displayedPosition = Number.parseInt(row.querySelector("td:first-child")?.textContent?.trim() || "", 10);
+      products.push({
+        ...product,
+        cartPosition: Number.isInteger(displayedPosition) && displayedPosition > 0 ? displayedPosition : index + 1,
+      });
     });
     return products;
   }
   function rulesForCart(products) {
     const cartIds = new Set(products.map(item => item.productId));
-    const sourceNames = new Map(products.map(item => [item.productId, item.productName]));
+    const sourceProducts = new Map(products.map(item => [item.productId, item]));
     const seenSuggested = new Set();
     return (dataset?.rules || [])
       .filter(rule => cartIds.has(Number(rule.source_product_id)))
       .filter(rule => !cartIds.has(Number(rule.suggested_product_id)))
-      .sort((a, b) => Number(a.priority || 100) - Number(b.priority || 100))
+      .map(rule => {
+        const source = sourceProducts.get(Number(rule.source_product_id));
+        return {
+          ...rule,
+          __cartSourceName: source?.productName || rule.source_product_name,
+          __cartPosition: source?.cartPosition || Number.MAX_SAFE_INTEGER,
+        };
+      })
+      .sort((a, b) => a.__cartPosition - b.__cartPosition || Number(a.priority || 100) - Number(b.priority || 100))
       .filter(rule => {
         const id = Number(rule.suggested_product_id);
         if (seenSuggested.has(id)) return false;
         seenSuggested.add(id);
         return true;
-      })
-      .map(rule => ({ ...rule, __cartSourceName: sourceNames.get(Number(rule.source_product_id)) || rule.source_product_name }));
+      });
   }
   function escapeHtml(value) {
     const node = document.createElement("div");
@@ -132,11 +141,15 @@
     document.querySelectorAll(".ccp-cart-host").forEach(host => host.classList.remove("ccp-cart-host"));
   }
   function bindPanel(panel, signature) {
-    panel.querySelector(".ccp-close")?.addEventListener("click", () => {
+    panel.querySelector(".ccp-close")?.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
       dismissedProductSignature = signature;
       removePanel();
     });
-    panel.querySelector(".ccp-minimize")?.addEventListener("click", () => {
+    panel.querySelector(".ccp-minimize")?.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
       minimized = !minimized;
       panel.classList.toggle("ccp-minimized", minimized);
       panel.querySelector(".ccp-minimize").textContent = minimized ? "+" : "−";
@@ -145,43 +158,35 @@
   function renderShell(signature, body, stateClass = "") {
     const panel = getPanel();
     panel.className = `${minimized ? "ccp-minimized " : ""}${stateClass}`.trim();
-    panel.innerHTML = `<div class="ccp-header"><span>💊 Gợi ý tư vấn bán kèm</span><div><button class="ccp-minimize" title="Thu gọn">${minimized ? "+" : "−"}</button><button class="ccp-close" title="Đóng">×</button></div></div><div class="ccp-body">${body}</div>`;
+    panel.innerHTML = `<div class="ccp-header"><span>💊 Gợi ý tư vấn bán kèm</span><div><button type="button" class="ccp-minimize" title="Thu gọn">${minimized ? "+" : "−"}</button><button type="button" class="ccp-close" title="Đóng">×</button></div></div><div class="ccp-body">${body}</div>`;
     bindPanel(panel, signature);
     placePanel(panel);
   }
   function renderLoading(signature, count) {
     renderShell(signature, `<div class="ccp-loading"><span class="ccp-spinner"></span>Đang kiểm tra tồn kho ${count} sản phẩm…</div>`, "ccp-state-loading");
   }
-  function statusLabel(stock) {
-    if (stock?.reason === "OUT_OF_STOCK") return "Hết tồn tại POS này";
-    if (stock?.reason === "NO_PRICE") return "Chưa có giá bán hợp lệ";
-    if (stock?.reason === "NOT_FOUND") return "Không tìm thấy thông tin sản phẩm";
-    return "Chưa xác nhận được tồn kho";
-  }
   function suggestionCard(rule, stock) {
     const note = String(rule.consultation_note || "").trim();
     const noteHtml = note ? `<div class="ccp-note"><span>Gợi ý tư vấn</span>${escapeHtml(note)}</div>` : "";
-    if (!stock?.available) {
-      return `<li class="ccp-unavailable"><div class="ccp-suggestion-name">${escapeHtml(rule.suggested_product_name)}</div>${noteHtml}<div class="ccp-meta"><span class="ccp-status-unavailable">${escapeHtml(statusLabel(stock))}</span></div></li>`;
-    }
     return `<li><div class="ccp-suggestion-name">${escapeHtml(rule.suggested_product_name)}</div>${noteHtml}<div class="ccp-meta"><span class="ccp-stock">Tổng tồn: ${stock.availableQuantity}</span><span class="ccp-unit">Đơn vị: ${escapeHtml(stock.unitName || "—")}</span><span class="ccp-price">Giá: ${formatPrice(stock.finalPrice)}</span></div></li>`;
   }
   function renderSuggestions(signature, rules, stockResult) {
-    const unavailableCount = rules.filter(rule => !stockResult.products?.[Number(rule.suggested_product_id)]?.available).length;
-    const banner = unavailableCount === rules.length
-      ? `<div class="ccp-empty-stock">Các sản phẩm gợi ý hiện đã hết tồn hoặc chưa sẵn sàng bán tại POS này.</div>`
-      : unavailableCount > 0 ? `<div class="ccp-partial-stock">${unavailableCount} sản phẩm gợi ý hiện chưa sẵn sàng bán tại POS này.</div>` : "";
+    const availableRules = rules.filter(rule => stockResult.products?.[Number(rule.suggested_product_id)]?.available);
+    if (!availableRules.length) {
+      renderShell(signature, `<div class="ccp-empty-stock">Hiện không có sản phẩm gợi ý còn tồn kho tại POS này.</div>`, "ccp-state-empty");
+      return;
+    }
     const grouped = new Map();
-    rules.forEach(rule => {
-      const key = `${rule.source_product_id}:${rule.__cartSourceName}`;
+    availableRules.forEach(rule => {
+      const key = `${rule.__cartPosition}:${rule.source_product_id}:${rule.__cartSourceName}`;
       if (!grouped.has(key)) grouped.set(key, []);
       grouped.get(key).push(rule);
     });
-    const html = banner + [...grouped.entries()].map(([key, group]) => {
-      const sourceName = key.slice(key.indexOf(":") + 1);
-      return `<section class="ccp-group"><div class="ccp-group-title">Khi bán: ${escapeHtml(sourceName)}</div><ul>${group.map(rule => suggestionCard(rule, stockResult.products?.[Number(rule.suggested_product_id)])).join("")}</ul></section>`;
+    const html = [...grouped.values()].map(group => {
+      const source = group[0];
+      return `<section class="ccp-group"><div class="ccp-group-title"><span class="ccp-source-index">${source.__cartPosition}</span><span>Khi bán: ${escapeHtml(source.__cartSourceName)}</span></div><ul>${group.map(rule => suggestionCard(rule, stockResult.products?.[Number(rule.suggested_product_id)])).join("")}</ul></section>`;
     }).join("");
-    renderShell(signature, html, unavailableCount === rules.length ? "ccp-state-empty" : "ccp-state-ready");
+    renderShell(signature, html, "ccp-state-ready");
   }
   function renderWarning(signature, message) {
     renderShell(signature, `<div class="ccp-warning">${escapeHtml(message)}</div>`, "ccp-state-warning");
