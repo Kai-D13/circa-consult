@@ -8,6 +8,8 @@ CÀI ĐẶT:
 4. Bấm "Tải tiện ích đã giải nén" (Load unpacked) và chọn thư mục vừa giải nén.
 5. Mở trang https://pos.v2.circa.vn/ban-hang và tạo đơn hàng - khi thêm sản phẩm
    nằm trong danh sách cần tư vấn, khung gợi ý sẽ hiện ở góc dưới bên phải màn hình.
+   Package Chrome Web Store cũng hỗ trợ https://pos.dev.circa-v2.buymed.tech/ban-hang/*
+   để reviewer kiểm thử bằng tài khoản DEV không yêu cầu 2FA.
 
 CẤU HÌNH DANH SÁCH BẰNG FILE EXCEL:
 1. Bấm icon extension trên thanh công cụ Chrome, bấm "Mở trang cấu hình".

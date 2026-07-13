@@ -4,7 +4,11 @@ importScripts("core.js");
 const CONFIG = Object.freeze({
   supabaseUrl: "https://wbbjxaegcubhyxgemucj.supabase.co",
   supabasePublishableKey: "sb_publishable_qg-vekzhhsnX90Aj5YUUWg_t9KiR_bN",
-  circaProductApi: "https://api.v2.circa.vn/v2/product",
+  productApiByPosOrigin: Object.freeze({
+    "https://pos.v2.circa.vn": "https://api.v2.circa.vn/v2/product",
+    "https://pos.dev.circa-v2.buymed.tech": "https://pos.dev.circa-v2.buymed.tech/backend/v2/product",
+  }),
+  devPosOrigin: "https://pos.dev.circa-v2.buymed.tech",
   syncAlarm: "circa-consult-sync",
   syncMinutes: 15,
   stockCacheTtlMs: 60_000,
@@ -59,13 +63,13 @@ function normalizeIds(values) {
 
 function wait(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
-async function fetchProductItems(productIds, sessionToken) {
+async function fetchProductItems(productIds, sessionToken, productApi) {
   let lastError = null;
   for (let attempt = 1; attempt <= CONFIG.stockRequestAttempts; attempt += 1) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), CONFIG.requestTimeoutMs);
     try {
-      const response = await fetch(CONFIG.circaProductApi, {
+      const response = await fetch(productApi, {
         method: "POST",
         headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
         body: JSON.stringify({ product_ids: productIds, get_all_price: true }),
@@ -97,29 +101,35 @@ async function fetchProductItems(productIds, sessionToken) {
   throw lastError || Object.assign(new Error("Không kiểm tra được tồn kho."), { code: "API_ERROR" });
 }
 
-async function fetchStock({ productIds, sessionToken, posId, salesLocationId }) {
+async function fetchStock({ productIds, sessionToken, posId, salesLocationId, posOrigin }) {
   const ids = normalizeIds(productIds);
   if (!ids.length) return { ok: true, products: {} };
   if (!sessionToken) return { ok: false, code: "NO_SESSION", error: "Không đọc được phiên đăng nhập POS." };
-  if (!posId || !salesLocationId) return { ok: false, code: "NO_POS_CONTEXT", error: "Không xác định được POS hoặc sales location." };
+  const productApi = CONFIG.productApiByPosOrigin[posOrigin];
+  if (!productApi) return { ok: false, code: "UNSUPPORTED_POS_ORIGIN", error: "Domain POS không nằm trong danh sách được extension hỗ trợ." };
+  const isDevPos = posOrigin === CONFIG.devPosOrigin;
+  if (!posId || (!salesLocationId && !isDevPos)) return { ok: false, code: "NO_POS_CONTEXT", error: "Không xác định được POS hoặc sales location." };
 
   const now = Date.now();
   const result = {};
   const missing = [];
   ids.forEach(id => {
-    const cached = stockCache.get(`${posId}:${id}`);
+    const cached = stockCache.get(`${posOrigin}:${posId}:${salesLocationId || "single-location"}:${id}`);
     if (cached && cached.expiresAt > now) result[id] = cached.value;
     else missing.push(id);
   });
 
   if (missing.length) {
     try {
-      const items = await fetchProductItems(missing, sessionToken);
+      const items = await fetchProductItems(missing, sessionToken, productApi);
       const returned = new Map(items.map(item => [Number(item.product?.product_id), item]));
       missing.forEach(id => {
-        const value = CIRCA_CORE.evaluateStock(returned.get(id), id, salesLocationId);
+        const value = CIRCA_CORE.evaluateStock(returned.get(id), id, salesLocationId, {
+          allowSingleSalesLocationFallback: isDevPos,
+          matchPriceToStock: isDevPos,
+        });
         result[id] = value;
-        stockCache.set(`${posId}:${id}`, { value, expiresAt: now + CONFIG.stockCacheTtlMs });
+        stockCache.set(`${posOrigin}:${posId}:${salesLocationId || "single-location"}:${id}`, { value, expiresAt: now + CONFIG.stockCacheTtlMs });
       });
     } catch (error) {
       return { ok: false, code: error.code || "API_ERROR", error: error.message };

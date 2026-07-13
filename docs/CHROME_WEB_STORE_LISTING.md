@@ -29,7 +29,7 @@ Chức năng chính:
 - Nhận diện sản phẩm trong giỏ hàng theo product ID.
 - Hiển thị nội dung tư vấn bán kèm ngay trên màn hình POS.
 - Hiển thị tổng tồn base unit, đơn vị bán mặc định và đúng giá của đơn vị đó.
-- Cảnh báo rõ khi sản phẩm gợi ý hết tồn hoặc chưa có giá hợp lệ tại cửa hàng hiện tại.
+- Chỉ hiển thị sản phẩm gợi ý còn tồn và có giá hợp lệ tại cửa hàng hiện tại.
 - Không yêu cầu nhân viên POS tự import hoặc cấu hình dataset.
 
 Tiện ích chỉ hoạt động trên hệ thống Circa POS và dành cho hoạt động nội bộ của Circa Pharmacy.
@@ -44,7 +44,26 @@ Hỗ trợ nhân viên Circa POS tư vấn sản phẩm bán kèm còn tồn kho
 - `alarms`: kích hoạt đồng bộ dataset định kỳ mỗi 15 phút.
 - `https://pos.v2.circa.vn/*`: nhận diện product ID trong giỏ hàng và hiển thị giao diện gợi ý trên POS.
 - `https://api.v2.circa.vn/*`: kiểm tra giá và tồn kho của sản phẩm gợi ý bằng phiên POS hiện tại.
+- `https://pos.dev.circa-v2.buymed.tech/*`: chạy cùng chức năng trên môi trường Circa POS DEV dành cho reviewer; đọc giỏ hàng và gọi API `/backend/v2/product` bằng phiên DEV hiện tại.
 - `https://wbbjxaegcubhyxgemucj.supabase.co/*`: tải dataset tư vấn đã được Admin Circa publish.
+
+## Test instructions cho Chrome Web Store reviewer
+
+Credentials được nhập riêng trong hai trường Username và Password của tab Test instructions. Tài khoản test không yêu cầu 2FA.
+
+```text
+1. Sign in at https://pos.dev.circa-v2.buymed.tech using the test credentials provided above. No 2FA is required.
+2. Open the Sales page and create a new order. A sample order URL has the format:
+   https://pos.dev.circa-v2.buymed.tech/ban-hang/{order-id}
+3. Search for product ID 1109 and add it to the order.
+4. The extension reads product ID 1109 from the Circa POS cart and displays the "Gợi ý tư vấn bán kèm" panel at the bottom-right of the cart area.
+5. The published consultation dataset maps source product 1109 to suggested product 1107.
+6. The extension calls the Circa DEV endpoint /backend/v2/product with the current POS session, verifies stock and price, and displays product 1107 only when it is sellable at the test POS.
+7. Expected test data: suggested product 1107, seller CIRCATEST, sale unit "bịch", price 222,300 VND. Stock quantity can change during testing.
+8. The panel can be minimized or closed without submitting, refreshing, or changing the POS order.
+
+The extension does not collect customer identity, payment information, diagnoses, or medical records. The POS session token is sent only to the Circa API to authenticate the stock and price request. It is never sent to Supabase.
+```
 
 ## Privacy Practices
 

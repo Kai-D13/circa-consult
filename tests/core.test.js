@@ -52,7 +52,8 @@ test("product 13720 is available only at matching sales location", () => {
   };
   assert.deepEqual(JSON.parse(JSON.stringify(core.evaluateStock(item, 13720, "sales-a"))), {
     productId: 13720, available: true, availableQuantity: 1, finalPrice: 250000, originPrice: 250000,
-    unitId: "box", unitName: "hộp", convertRate: 1, isDefaultSaleUnit: true, reason: "AVAILABLE",
+    unitId: "box", unitName: "hộp", convertRate: 1, isDefaultSaleUnit: true,
+    resolvedSalesLocationId: "sales-a", reason: "AVAILABLE",
   });
   assert.equal(core.evaluateStock(item, 13720, "sales-b").available, false);
 });
@@ -126,4 +127,50 @@ test("default sale unit is not replaced by another unit when its price is missin
   assert.equal(result.unitName, "hộp");
   assert.equal(result.finalPrice, null);
   assert.equal(result.reason, "NO_PRICE");
+});
+
+test("DEV fallback uses the only SALES location and price from its stock seller", () => {
+  const item = {
+    product: { retail_units: [
+      { unit_id: "bag", unit_name: "bịch", convert_rate: 5, default_sale_unit: false },
+      { unit_id: "piece", unit_name: "miếng", convert_rate: 1, default_sale_unit: false },
+      { unit_id: "tablet", unit_name: "viên", convert_rate: 1, is_base_unit: true, default_sale_unit: false },
+    ] },
+    stock_details: [
+      { location_type: "SALES", location_id: "dev-sales", quantity: 499, seller_code: "CIRCATEST", sku_code: "CIRCATEST.TEST" },
+    ],
+    prices: [
+      { seller_code: "OTHER", sku_code: "OTHER.TEST", unit_id: "bag", final_price: 1 },
+      { seller_code: "CIRCATEST", sku_code: "CIRCATEST.TEST", unit_id: "bag", origin_price: 222300, final_price: 222300 },
+      { seller_code: "CIRCATEST", sku_code: "CIRCATEST.TEST", unit_id: "piece", origin_price: 15500, final_price: 15500 },
+    ],
+  };
+  const result = core.evaluateStock(item, 1107, "", {
+    allowSingleSalesLocationFallback: true,
+    matchPriceToStock: true,
+  });
+  assert.equal(result.available, true);
+  assert.equal(result.availableQuantity, 499);
+  assert.equal(result.resolvedSalesLocationId, "dev-sales");
+  assert.equal(result.unitName, "bịch");
+  assert.equal(result.finalPrice, 222300);
+});
+
+test("DEV fallback refuses to guess when more than one SALES location is returned", () => {
+  const item = {
+    product: { retail_units: [{ unit_id: "box", unit_name: "hộp", convert_rate: 1 }] },
+    stock_details: [
+      { location_type: "SALES", location_id: "dev-a", quantity: 1, seller_code: "A" },
+      { location_type: "SALES", location_id: "dev-b", quantity: 1, seller_code: "B" },
+    ],
+    prices: [{ seller_code: "A", unit_id: "box", final_price: 1000 }],
+  };
+  const result = core.evaluateStock(item, 1107, "", {
+    allowSingleSalesLocationFallback: true,
+    matchPriceToStock: true,
+  });
+  assert.equal(result.available, false);
+  assert.equal(result.availableQuantity, 0);
+  assert.equal(result.resolvedSalesLocationId, null);
+  assert.equal(result.reason, "AMBIGUOUS_LOCATION");
 });

@@ -19,9 +19,14 @@
     const match = String(text || "").trim().match(/^(\d+)\s*-\s*(.+)$/s);
     return match ? { productId: Number(match[1]), productName: match[2].trim() } : null;
   }
-  function selectSaleOption(item) {
+  function selectSaleOption(item, priceScope = null) {
     const units = Array.isArray(item?.product?.retail_units) ? item.product.retail_units : [];
-    const validPrices = (item?.prices || []).filter(price => Number(price.final_price) > 0);
+    const sellerCodes = new Set(priceScope?.sellerCodes || []);
+    const skuCodes = new Set(priceScope?.skuCodes || []);
+    const shouldScopePrices = sellerCodes.size > 0 || skuCodes.size > 0;
+    const validPrices = (item?.prices || [])
+      .filter(price => Number(price.final_price) > 0)
+      .filter(price => !shouldScopePrices || sellerCodes.has(price.seller_code) || skuCodes.has(price.sku_code));
     const defaultUnit = units.find(unit => unit.default_sale_unit === true) || null;
     const orderedUnits = [defaultUnit, ...units]
       .filter(Boolean)
@@ -39,10 +44,21 @@
       originPrice: price && Number(price.origin_price) > 0 ? Number(price.origin_price) : null,
     };
   }
-  function evaluateStock(item, productId, salesLocationId) {
-    const salesStocks = (item?.stock_details || []).filter(stock => stock.location_type === "SALES" && stock.location_id === salesLocationId && Number(stock.quantity) > 0);
+  function evaluateStock(item, productId, salesLocationId, options = {}) {
+    const positiveSalesStocks = (item?.stock_details || []).filter(stock => stock.location_type === "SALES" && Number(stock.quantity) > 0);
+    const salesLocationIds = [...new Set(positiveSalesStocks.map(stock => stock.location_id).filter(Boolean))];
+    const canUseSingleLocation = !salesLocationId && options.allowSingleSalesLocationFallback === true && salesLocationIds.length === 1;
+    const resolvedSalesLocationId = salesLocationId || (canUseSingleLocation ? salesLocationIds[0] : null);
+    const salesStocks = resolvedSalesLocationId
+      ? positiveSalesStocks.filter(stock => stock.location_id === resolvedSalesLocationId)
+      : [];
     const availableQuantity = salesStocks.reduce((sum, stock) => sum + Number(stock.quantity), 0);
-    const saleOption = selectSaleOption(item);
+    const priceScope = options.matchPriceToStock === true ? {
+      sellerCodes: salesStocks.map(stock => stock.seller_code).filter(Boolean),
+      skuCodes: salesStocks.map(stock => stock.sku_code).filter(Boolean),
+    } : null;
+    const saleOption = selectSaleOption(item, priceScope);
+    const ambiguousLocation = !salesLocationId && options.allowSingleSalesLocationFallback === true && salesLocationIds.length > 1;
     return {
       productId: Number(productId),
       available: availableQuantity > 0 && Number(saleOption.finalPrice) > 0,
@@ -53,7 +69,8 @@
       unitName: saleOption.unitName,
       convertRate: saleOption.convertRate,
       isDefaultSaleUnit: saleOption.isDefaultSaleUnit,
-      reason: !item ? "NOT_FOUND" : availableQuantity <= 0 ? "OUT_OF_STOCK" : !saleOption.finalPrice ? "NO_PRICE" : "AVAILABLE",
+      resolvedSalesLocationId,
+      reason: !item ? "NOT_FOUND" : ambiguousLocation ? "AMBIGUOUS_LOCATION" : availableQuantity <= 0 ? "OUT_OF_STOCK" : !saleOption.finalPrice ? "NO_PRICE" : "AVAILABLE",
     };
   }
   root.CIRCA_CORE = Object.freeze({ validateDataset, parseProductLabel, selectSaleOption, evaluateStock });

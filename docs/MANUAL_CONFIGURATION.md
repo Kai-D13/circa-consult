@@ -191,7 +191,9 @@ quantity > 0
 final_price > 0
 ```
 
-Stock cache theo `pos_id + product_id` trong 60 giây. Token POS không được ghi vào Chrome storage hoặc Supabase.
+Trên production, `location_id` phải khớp `auto_put_location`. Trên POS DEV dành cho reviewer, nếu `auto_put_location` rỗng thì extension chỉ fallback khi API trả đúng một `SALES location`; nhiều location sẽ bị từ chối thay vì tự cộng tồn. Giá DEV phải khớp `seller_code` hoặc `sku_code` của stock đã chọn.
+
+Stock cache theo `POS origin + pos_id + sales location + product_id` trong 60 giây. Token POS không được ghi vào Chrome storage hoặc Supabase.
 
 ## 7. Chrome Web Store
 
@@ -201,7 +203,7 @@ Trước khi submit:
 2. Chuẩn bị icon 16/32/48/128 px.
 3. Chuẩn bị screenshot UI extension.
 4. Tạo privacy policy mô tả dữ liệu được xử lý.
-5. Khai báo mục đích permissions `storage`, `alarms` và ba host permissions.
+5. Khai báo mục đích permissions `storage`, `alarms` và bốn host permissions, bao gồm Circa POS DEV dành cho reviewer.
 6. Xác nhận không có remote executable code.
 7. Upload ZIP từ `dist`.
 8. Điền single purpose: hỗ trợ dược sĩ xem gợi ý bán kèm còn tồn tại POS.

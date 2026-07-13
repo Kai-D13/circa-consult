@@ -108,6 +108,9 @@ Ghi kết quả mỗi case: `PASS`, `FAIL`, `BLOCKED`, kèm POS, thời gian, da
 - [ ] Remove rồi add lại cùng product ID kích hoạt scan mới không chờ 60 giây.
 - [ ] Lỗi tạm thời được thử lại và không biến mất im lặng.
 - [ ] Tiếng Việt hiển thị đúng UTF-8.
+- [ ] Trên `pos.dev.circa-v2.buymed.tech`, content script nhận diện giỏ hàng và gọi đúng `/backend/v2/product`, không gọi API production.
+- [ ] DEV product `1109` hiển thị suggested product `1107` với seller `CIRCATEST`, unit `bịch` và giá `222.300 đ` khi test data còn hiệu lực.
+- [ ] DEV có `auto_put_location` rỗng chỉ được fallback khi API trả đúng một SALES location; nhiều location không được tự cộng tồn.
 
 ## G. Regression POS
 
