@@ -15,6 +15,10 @@
     });
     return dataset;
   }
+  function isSalesPathname(pathname) {
+    const value = String(pathname || "");
+    return value === "/ban-hang" || value.startsWith("/ban-hang/");
+  }
   function parseProductLabel(text) {
     const match = String(text || "").trim().match(/^(\d+)\s*-\s*(.+)$/s);
     return match ? { productId: Number(match[1]), productName: match[2].trim() } : null;
@@ -76,5 +80,5 @@
       reason: !item ? "NOT_FOUND" : ambiguousLocation ? "AMBIGUOUS_LOCATION" : availableQuantity <= 0 ? "OUT_OF_STOCK" : !saleOption.finalPrice ? "NO_PRICE" : "AVAILABLE",
     };
   }
-  root.CIRCA_CORE = Object.freeze({ validateDataset, parseProductLabel, selectSaleOption, evaluateStock });
+  root.CIRCA_CORE = Object.freeze({ validateDataset, isSalesPathname, parseProductLabel, selectSaleOption, evaluateStock });
 })(globalThis);

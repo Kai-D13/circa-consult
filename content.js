@@ -199,6 +199,7 @@
     retryTimer = setTimeout(() => scanCart(true).catch(() => {}), 1500 * retryState.attempts);
   }
   async function executeScan(force = false) {
+    if (!CIRCA_CORE.isSalesPathname(location.pathname)) { removePanel(); return; }
     const revision = cartRevision;
     const products = extractCartProducts(document.querySelector(TABLE_SELECTOR));
     const signature = productSignature(products);
@@ -262,6 +263,11 @@
     clearTimeout(scanTimer);
     scanTimer = setTimeout(() => scanCart().catch(error => renderWarning("", `Extension gặp lỗi: ${error.message}`)), 180);
   }
+  function detachCartObserver() {
+    tableObserver?.disconnect();
+    tableObserver = null;
+    observedTable = null;
+  }
   function attachCartObserver() {
     const table = document.querySelector(TABLE_SELECTOR);
     if (!table || table === observedTable) return;
@@ -277,6 +283,11 @@
     scheduleScan();
   }
   function ensureLayout() {
+    if (!CIRCA_CORE.isSalesPathname(location.pathname)) {
+      detachCartObserver();
+      removePanel();
+      return;
+    }
     attachCartObserver();
     const panel = document.getElementById(PANEL_ID);
     if (panel) placePanel(panel);

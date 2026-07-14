@@ -30,6 +30,22 @@ test("parse product label from real POS format", () => {
   assert.equal(core.parseProductLabel("Không có sản phẩm để hiển thị"), null);
 });
 
+test("sales route guard supports POS list and SPA order URLs only", () => {
+  assert.equal(core.isSalesPathname("/ban-hang"), true);
+  assert.equal(core.isSalesPathname("/ban-hang/"), true);
+  assert.equal(core.isSalesPathname("/ban-hang/3f3ff083-c685-444e-8ace-9eff0b9c4075"), true);
+  assert.equal(core.isSalesPathname("/trang-chu"), false);
+  assert.equal(core.isSalesPathname("/ban-hang-khac"), false);
+});
+
+test("content script is injected before POS SPA navigation", () => {
+  const manifest = JSON.parse(fs.readFileSync("manifest.json", "utf8"));
+  const matches = manifest.content_scripts[0].matches;
+  assert.deepEqual(matches, [
+    "https://pos.v2.circa.vn/*",
+    "https://pos.dev.circa-v2.buymed.tech/*",
+  ]);
+});
 test("accept valid exact-id dataset", () => {
   const input = dataset([rule(), rule({ suggested_product_id: 2001395, suggested_product_name: "Augmentin" })]);
   assert.equal(core.validateDataset(input), input);

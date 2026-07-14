@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Circa POS - Gợi ý tư vấn bán kèm",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "description": "Đồng bộ dữ liệu tư vấn tập trung, nhận diện sản phẩm theo product ID và chỉ gợi ý sản phẩm còn tồn tại POS.",
   "icons": {
     "16": "icons/icon-16.png",
@@ -30,8 +30,8 @@
   "content_scripts": [
     {
       "matches": [
-        "https://pos.v2.circa.vn/ban-hang/*",
-        "https://pos.dev.circa-v2.buymed.tech/ban-hang/*"
+        "https://pos.v2.circa.vn/*",
+        "https://pos.dev.circa-v2.buymed.tech/*"
       ],
       "js": ["core.js", "content.js"],
       "css": ["content.css"],
