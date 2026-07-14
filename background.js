@@ -108,13 +108,14 @@ async function fetchStock({ productIds, sessionToken, posId, salesLocationId, po
   const productApi = CONFIG.productApiByPosOrigin[posOrigin];
   if (!productApi) return { ok: false, code: "UNSUPPORTED_POS_ORIGIN", error: "Domain POS không nằm trong danh sách được extension hỗ trợ." };
   const isDevPos = posOrigin === CONFIG.devPosOrigin;
-  if (!posId || (!salesLocationId && !isDevPos)) return { ok: false, code: "NO_POS_CONTEXT", error: "Không xác định được POS hoặc sales location." };
+  if (!posId) return { ok: false, code: "NO_POS_CONTEXT", error: "Không xác định được POS bán hàng." };
+  const cacheLocationScope = salesLocationId || (isDevPos ? "single-location" : "all-sales-locations");
 
   const now = Date.now();
   const result = {};
   const missing = [];
   ids.forEach(id => {
-    const cached = stockCache.get(`${posOrigin}:${posId}:${salesLocationId || "single-location"}:${id}`);
+    const cached = stockCache.get(`${posOrigin}:${posId}:${cacheLocationScope}:${id}`);
     if (cached && cached.expiresAt > now) result[id] = cached.value;
     else missing.push(id);
   });
@@ -126,10 +127,11 @@ async function fetchStock({ productIds, sessionToken, posId, salesLocationId, po
       missing.forEach(id => {
         const value = CIRCA_CORE.evaluateStock(returned.get(id), id, salesLocationId, {
           allowSingleSalesLocationFallback: isDevPos,
+          aggregateAllSalesLocations: !salesLocationId && !isDevPos,
           matchPriceToStock: isDevPos,
         });
         result[id] = value;
-        stockCache.set(`${posOrigin}:${posId}:${salesLocationId || "single-location"}:${id}`, { value, expiresAt: now + CONFIG.stockCacheTtlMs });
+        stockCache.set(`${posOrigin}:${posId}:${cacheLocationScope}:${id}`, { value, expiresAt: now + CONFIG.stockCacheTtlMs });
       });
     } catch (error) {
       return { ok: false, code: error.code || "API_ERROR", error: error.message };

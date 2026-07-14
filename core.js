@@ -47,18 +47,21 @@
   function evaluateStock(item, productId, salesLocationId, options = {}) {
     const positiveSalesStocks = (item?.stock_details || []).filter(stock => stock.location_type === "SALES" && Number(stock.quantity) > 0);
     const salesLocationIds = [...new Set(positiveSalesStocks.map(stock => stock.location_id).filter(Boolean))];
+    const aggregateAllSalesLocations = !salesLocationId && options.aggregateAllSalesLocations === true;
     const canUseSingleLocation = !salesLocationId && options.allowSingleSalesLocationFallback === true && salesLocationIds.length === 1;
     const resolvedSalesLocationId = salesLocationId || (canUseSingleLocation ? salesLocationIds[0] : null);
-    const salesStocks = resolvedSalesLocationId
-      ? positiveSalesStocks.filter(stock => stock.location_id === resolvedSalesLocationId)
-      : [];
+    const salesStocks = aggregateAllSalesLocations
+      ? positiveSalesStocks
+      : resolvedSalesLocationId
+        ? positiveSalesStocks.filter(stock => stock.location_id === resolvedSalesLocationId)
+        : [];
     const availableQuantity = salesStocks.reduce((sum, stock) => sum + Number(stock.quantity), 0);
     const priceScope = options.matchPriceToStock === true ? {
       sellerCodes: salesStocks.map(stock => stock.seller_code).filter(Boolean),
       skuCodes: salesStocks.map(stock => stock.sku_code).filter(Boolean),
     } : null;
     const saleOption = selectSaleOption(item, priceScope);
-    const ambiguousLocation = !salesLocationId && options.allowSingleSalesLocationFallback === true && salesLocationIds.length > 1;
+    const ambiguousLocation = !aggregateAllSalesLocations && !salesLocationId && options.allowSingleSalesLocationFallback === true && salesLocationIds.length > 1;
     return {
       productId: Number(productId),
       available: availableQuantity > 0 && Number(saleOption.finalPrice) > 0,

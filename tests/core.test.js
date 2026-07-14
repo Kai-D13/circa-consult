@@ -129,6 +129,33 @@ test("default sale unit is not replaced by another unit when its price is missin
   assert.equal(result.reason, "NO_PRICE");
 });
 
+test("manual-location PROD POS aggregates all positive SALES stock", () => {
+  const item = {
+    product: { retail_units: [
+      { unit_id: "tablet", unit_name: "vien", convert_rate: 1, is_base_unit: true, default_sale_unit: false },
+      { unit_id: "box", unit_name: "hop", convert_rate: 180, default_sale_unit: false },
+      { unit_id: "blister", unit_name: "vi", convert_rate: 10, default_sale_unit: true },
+    ] },
+    stock_details: [
+      { location_type: "SALES", location_id: "cutting-room", quantity: 80, is_used_location: true },
+      { location_type: "SALES", location_id: "1I", quantity: 25, is_used_location: false },
+      { location_type: "SALES", location_id: "negative", quantity: -10, is_used_location: false },
+      { location_type: "WAREHOUSE", location_id: "warehouse", quantity: 999 },
+    ],
+    prices: [
+      { unit_id: "tablet", final_price: 1600 },
+      { unit_id: "box", final_price: 288000 },
+      { unit_id: "blister", final_price: 16000 },
+    ],
+  };
+  const result = core.evaluateStock(item, 4721, "", { aggregateAllSalesLocations: true });
+  assert.equal(result.available, true);
+  assert.equal(result.availableQuantity, 105);
+  assert.equal(result.resolvedSalesLocationId, null);
+  assert.equal(result.unitName, "vi");
+  assert.equal(result.finalPrice, 16000);
+  assert.equal(result.reason, "AVAILABLE");
+});
 test("DEV fallback uses the only SALES location and price from its stock seller", () => {
   const item = {
     product: { retail_units: [

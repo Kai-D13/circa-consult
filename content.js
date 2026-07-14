@@ -6,7 +6,6 @@
   const FALLBACK_SCAN_MS = 3_000;
   const MESSAGE_TIMEOUT_MS = 25_000;
   const MAX_UI_RETRIES = 2;
-  const DEV_POS_ORIGIN = "https://pos.dev.circa-v2.buymed.tech";
   let dataset = null;
   let tableObserver = null;
   let observedTable = null;
@@ -223,8 +222,7 @@
     const posConfig = readJsonStorage("pos_config");
     const entity = readJsonStorage("entity");
     const selectedStore = localStorage.getItem("storesClicked");
-    const allowsSingleLocationFallback = location.origin === DEV_POS_ORIGIN;
-    if (!posConfig?.pos_id || (!posConfig?.auto_put_location && !allowsSingleLocationFallback) || (entity?.id && entity.id !== posConfig.pos_id) || (selectedStore && selectedStore !== posConfig.pos_id)) {
+    if (!posConfig?.pos_id || (entity?.id && entity.id !== posConfig.pos_id) || (selectedStore && selectedStore !== posConfig.pos_id)) {
       renderWarning(signature, "Chưa xác định được đúng cửa hàng bán hàng. Extension sẽ tự thử lại.");
       scheduleRetry(signature);
       return;
