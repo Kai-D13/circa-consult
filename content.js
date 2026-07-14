@@ -168,7 +168,7 @@
   function suggestionCard(rule, stock) {
     const note = String(rule.consultation_note || "").trim();
     const noteHtml = note ? `<div class="ccp-note"><span>Gợi ý tư vấn</span>${escapeHtml(note)}</div>` : "";
-    return `<li><div class="ccp-suggestion-name">${escapeHtml(rule.suggested_product_name)}</div>${noteHtml}<div class="ccp-meta"><span class="ccp-stock">Tổng tồn: ${stock.availableQuantity}</span><span class="ccp-unit">Đơn vị: ${escapeHtml(stock.unitName || "—")}</span><span class="ccp-price">Giá: ${formatPrice(stock.finalPrice)}</span></div></li>`;
+    return `<li><div class="ccp-suggestion-name">${escapeHtml(rule.suggested_product_name)}</div><div class="ccp-suggestion-id">Product ID: ${escapeHtml(rule.suggested_product_id)}</div>${noteHtml}<div class="ccp-meta"><span class="ccp-stock">Tổng tồn: ${stock.availableQuantity}</span><span class="ccp-unit">Đơn vị: ${escapeHtml(stock.unitName || "—")}</span><span class="ccp-price">Giá: ${formatPrice(stock.finalPrice)}</span></div></li>`;
   }
   function renderSuggestions(signature, rules, stockResult) {
     const availableRules = rules.filter(rule => stockResult.products?.[Number(rule.suggested_product_id)]?.available);

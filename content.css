@@ -1,9 +1,9 @@
 .ccp-cart-host { position: relative !important; }
-#circa-consult-panel { position: absolute; right: 12px; bottom: 12px; width: min(400px, calc(100% - 24px)); max-height: min(52vh, 460px); overflow: hidden; box-sizing: border-box; background: #fff; border: 1px solid #f0a05a; border-radius: 10px; box-shadow: 0 8px 24px rgba(31,41,55,.2); z-index: 1200; font: 13px/1.45 Arial, sans-serif; color: #1f2937; }
-#circa-consult-panel.ccp-floating { position: fixed; right: 16px; bottom: 16px; width: 360px; max-width: calc(100vw - 32px); z-index: 2147483647; }
+#circa-consult-panel { position: absolute; right: 12px; bottom: 12px; width: min(440px, calc(100% - 24px)); max-height: min(56vh, 500px); overflow: hidden; box-sizing: border-box; background: #fff; border: 1px solid #f0a05a; border-radius: 10px; box-shadow: 0 8px 24px rgba(31,41,55,.2); z-index: 1200; font: 13px/1.45 Arial, sans-serif; color: #1f2937; }
+#circa-consult-panel.ccp-floating { position: fixed; right: 16px; bottom: 16px; width: 400px; max-width: calc(100vw - 32px); z-index: 2147483647; }
 #circa-consult-panel .ccp-header { position: sticky; top: 0; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 9px 11px; background: #f27b21; color: #fff; font-weight: 700; }
 #circa-consult-panel .ccp-header button { width: 26px; height: 26px; padding: 0; margin-left: 2px; border: 0; border-radius: 5px; background: rgba(255,255,255,.18); color: #fff; cursor: pointer; font-size: 18px; line-height: 24px; }
-#circa-consult-panel .ccp-body { max-height: calc(min(52vh, 460px) - 44px); overflow-y: auto; padding: 10px; }
+#circa-consult-panel .ccp-body { max-height: calc(min(56vh, 500px) - 44px); overflow-y: auto; padding: 10px; }
 #circa-consult-panel.ccp-minimized .ccp-body { display: none; }
 #circa-consult-panel.ccp-minimized { width: min(300px, calc(100% - 8px)); }
 #circa-consult-panel .ccp-group { margin: 0 0 12px; }
@@ -15,6 +15,7 @@
 #circa-consult-panel li:last-child { margin-bottom: 0; }
 #circa-consult-panel li.ccp-unavailable { background: #f9fafb; border-color: #d0d5dd; }
 #circa-consult-panel .ccp-suggestion-name { color: #1f2937; font-weight: 700; }
+#circa-consult-panel .ccp-suggestion-id { display: inline-block; margin-top: 4px; padding: 2px 6px; border-radius: 4px; background: #fff1e8; color: #c2410c; font: 700 11px/1.4 Consolas, monospace; }
 #circa-consult-panel .ccp-note { margin-top: 7px; padding: 7px 8px; border-left: 4px solid #fb743e; border-radius: 4px; background: #fff1e8; color: #7c2d12; font-size: 13px; font-weight: 700; line-height: 1.45; }
 #circa-consult-panel .ccp-note span { display: block; margin-bottom: 2px; color: #c2410c; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
 #circa-consult-panel .ccp-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; color: #475467; font-size: 11px; }
@@ -31,5 +32,5 @@
 #circa-consult-panel .ccp-partial-stock { background: #fffaeb; color: #b54708; }
 @keyframes ccp-spin { to { transform: rotate(360deg); } }
 @media (max-width: 1050px) {
-  #circa-consult-panel:not(.ccp-floating) { right: 8px; bottom: 8px; width: min(380px, calc(100% - 16px)); }
+  #circa-consult-panel:not(.ccp-floating) { right: 8px; bottom: 8px; width: min(410px, calc(100% - 16px)); }
 }

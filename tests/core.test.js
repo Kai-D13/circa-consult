@@ -46,6 +46,14 @@ test("content script is injected before POS SPA navigation", () => {
     "https://pos.dev.circa-v2.buymed.tech/*",
   ]);
 });
+test("suggestion card exposes product ID and uses the balanced panel size", () => {
+  const contentScript = fs.readFileSync("content.js", "utf8");
+  const contentStyles = fs.readFileSync("content.css", "utf8");
+  assert.match(contentScript, /ccp-suggestion-id/);
+  assert.match(contentScript, /Product ID: \$\{escapeHtml\(rule\.suggested_product_id\)\}/);
+  assert.match(contentStyles, /width: min\(440px, calc\(100% - 24px\)\)/);
+  assert.match(contentStyles, /max-height: min\(56vh, 500px\)/);
+});
 test("accept valid exact-id dataset", () => {
   const input = dataset([rule(), rule({ suggested_product_id: 2001395, suggested_product_name: "Augmentin" })]);
   assert.equal(core.validateDataset(input), input);
