@@ -50,7 +50,8 @@ test("suggestion card exposes product ID and uses the balanced panel size", () =
   const contentScript = fs.readFileSync("content.js", "utf8");
   const contentStyles = fs.readFileSync("content.css", "utf8");
   assert.match(contentScript, /ccp-suggestion-id/);
-  assert.match(contentScript, /Product ID: \$\{escapeHtml\(rule\.suggested_product_id\)\}/);
+  assert.match(contentScript, /match\.rule\.suggested_product_id/);
+  assert.match(contentScript, /Thông tin hỗ trợ bán hàng/);
   assert.match(contentStyles, /width: min\(440px, calc\(100% - 24px\)\)/);
   assert.match(contentStyles, /max-height: min\(56vh, 500px\)/);
 });
@@ -75,9 +76,9 @@ test("product 13720 is available only at matching sales location", () => {
     prices: [{ unit_id: "box", origin_price: 250000, final_price: 250000 }],
   };
   assert.deepEqual(JSON.parse(JSON.stringify(core.evaluateStock(item, 13720, "sales-a"))), {
-    productId: 13720, available: true, availableQuantity: 1, finalPrice: 250000, originPrice: 250000,
-    unitId: "box", unitName: "hộp", convertRate: 1, isDefaultSaleUnit: true,
-    resolvedSalesLocationId: "sales-a", reason: "AVAILABLE",
+    productId: 13720, productName: null, available: true, availableQuantity: 1, finalPrice: 250000, originPrice: 250000,
+    unitId: "box", unitName: "hộp", convertRate: 1, isBaseUnit: false, isDefaultSaleUnit: true,
+    priceUnitId: "box", priceUnitName: "hộp", resolvedSalesLocationId: "sales-a", reason: "AVAILABLE",
   });
   assert.equal(core.evaluateStock(item, 13720, "sales-b").available, false);
 });
@@ -99,7 +100,7 @@ test("stock without a valid price is not sellable", () => {
   assert.equal(result.reason, "NO_PRICE");
 });
 
-test("product 111908 uses default sale unit price and keeps stock in base units", () => {
+test("product 111908 uses base unit for stock and price", () => {
   const item = {
     product: { retail_units: [
       { unit_id: "tablet", unit_name: "viên", convert_rate: 1, is_base_unit: true, default_sale_unit: false },
@@ -117,11 +118,42 @@ test("product 111908 uses default sale unit price and keeps stock in base units"
   const result = core.evaluateStock(item, 111908, "sales-a");
   assert.equal(result.available, true);
   assert.equal(result.availableQuantity, 60);
-  assert.equal(result.unitId, "box");
-  assert.equal(result.unitName, "hộp");
-  assert.equal(result.convertRate, 30);
-  assert.equal(result.finalPrice, 189000);
-  assert.equal(result.isDefaultSaleUnit, true);
+  assert.equal(result.unitId, "tablet");
+  assert.equal(result.unitName, "viên");
+  assert.equal(result.convertRate, 1);
+  assert.equal(result.isBaseUnit, true);
+  assert.equal(result.finalPrice, 6300);
+  assert.equal(result.priceUnitId, "tablet");
+  assert.equal(result.priceUnitName, "viên");
+  assert.equal(result.isDefaultSaleUnit, false);
+});
+
+test("product 2001719 reports stock and price in its base unit", () => {
+  const item = {
+    product: { retail_units: [
+      { unit_id: "carton", unit_name: "thùng", convert_rate: 24, is_base_unit: false, buymed_base_unit: false },
+      { unit_id: "bottle", unit_name: "chai", convert_rate: 1, is_base_unit: true, buymed_base_unit: true },
+    ] },
+    stock_details: [
+      { location_type: "SALES", location_id: "sales-a", quantity: 497 },
+      { location_type: "SALES", location_id: "sales-a", quantity: 130 },
+      { location_type: "SALES", location_id: "sales-a", quantity: 55 },
+    ],
+    prices: [
+      { unit_id: "carton", final_price: 58700 },
+      { unit_id: "bottle", final_price: 4000 },
+    ],
+  };
+  const result = core.evaluateStock(item, 2001719, "sales-a");
+  assert.equal(result.available, true);
+  assert.equal(result.availableQuantity, 682);
+  assert.equal(result.unitId, "bottle");
+  assert.equal(result.unitName, "chai");
+  assert.equal(result.convertRate, 1);
+  assert.equal(result.isBaseUnit, true);
+  assert.equal(result.finalPrice, 4000);
+  assert.equal(result.priceUnitId, "bottle");
+  assert.equal(result.priceUnitName, "chai");
 });
 
 test("single priced unit is used when API does not flag a default sale unit", () => {
@@ -137,20 +169,22 @@ test("single priced unit is used when API does not flag a default sale unit", ()
   assert.equal(result.isDefaultSaleUnit, false);
 });
 
-test("default sale unit is not replaced by another unit when its price is missing", () => {
+test("base unit price is used when the default sale unit has no price", () => {
   const item = {
     product: { retail_units: [
-      { unit_id: "tablet", unit_name: "viên", convert_rate: 1, default_sale_unit: false },
+      { unit_id: "tablet", unit_name: "viên", convert_rate: 1, is_base_unit: true, default_sale_unit: false },
       { unit_id: "box", unit_name: "hộp", convert_rate: 30, default_sale_unit: true },
     ] },
     stock_details: [{ location_type: "SALES", location_id: "sales-a", quantity: 60 }],
     prices: [{ unit_id: "tablet", final_price: 6300 }],
   };
   const result = core.evaluateStock(item, 111908, "sales-a");
-  assert.equal(result.available, false);
-  assert.equal(result.unitName, "hộp");
-  assert.equal(result.finalPrice, null);
-  assert.equal(result.reason, "NO_PRICE");
+  assert.equal(result.available, true);
+  assert.equal(result.unitName, "viên");
+  assert.equal(result.isBaseUnit, true);
+  assert.equal(result.finalPrice, 6300);
+  assert.equal(result.priceUnitName, "viên");
+  assert.equal(result.reason, "AVAILABLE");
 });
 
 test("manual-location PROD POS aggregates all positive SALES stock", () => {
@@ -176,8 +210,10 @@ test("manual-location PROD POS aggregates all positive SALES stock", () => {
   assert.equal(result.available, true);
   assert.equal(result.availableQuantity, 105);
   assert.equal(result.resolvedSalesLocationId, null);
-  assert.equal(result.unitName, "vi");
-  assert.equal(result.finalPrice, 16000);
+  assert.equal(result.unitName, "vien");
+  assert.equal(result.isBaseUnit, true);
+  assert.equal(result.finalPrice, 1600);
+  assert.equal(result.priceUnitName, "vien");
   assert.equal(result.reason, "AVAILABLE");
 });
 test("DEV fallback uses the only SALES location and price from its stock seller", () => {
@@ -203,8 +239,10 @@ test("DEV fallback uses the only SALES location and price from its stock seller"
   assert.equal(result.available, true);
   assert.equal(result.availableQuantity, 499);
   assert.equal(result.resolvedSalesLocationId, "dev-sales");
-  assert.equal(result.unitName, "bịch");
+  assert.equal(result.unitName, "viên");
+  assert.equal(result.isBaseUnit, true);
   assert.equal(result.finalPrice, 222300);
+  assert.equal(result.priceUnitName, "bịch");
 });
 
 test("DEV fallback refuses to guess when more than one SALES location is returned", () => {
@@ -224,4 +262,28 @@ test("DEV fallback refuses to guess when more than one SALES location is returne
   assert.equal(result.availableQuantity, 0);
   assert.equal(result.resolvedSalesLocationId, null);
   assert.equal(result.reason, "AMBIGUOUS_LOCATION");
+});
+
+test("accept a multi-program bundle and calculate lifecycle", () => {
+  const bundle = {
+    schema_version: 2,
+    bundle_version: "v2",
+    programs: [
+      { program_id: "consult", program_type: "consultation", dataset_version: "1", rules: [rule()] },
+      { program_id: "promo", program_type: "promotion", dataset_version: "1", rules: [
+        { source_product_id: 2001719, related_product_id: 2001719, message: "Mua 2 tặng 1" },
+      ] },
+    ],
+  };
+  assert.equal(core.validateProgramBundle(bundle), bundle);
+  const now = Date.parse("2026-07-17T00:00:00Z");
+  assert.equal(core.programLifecycle({ effective_from: "2026-07-16T00:00:00Z", effective_to: "2026-07-18T00:00:00Z" }, now), "active");
+  assert.equal(core.programLifecycle({ effective_from: "2026-07-18T00:00:00Z" }, now), "scheduled");
+  assert.equal(core.programLifecycle({ effective_to: "2026-07-16T00:00:00Z" }, now), "expired");
+});
+
+test("reject invalid promotion rules", () => {
+  assert.throws(() => core.validateProgramBundle({ schema_version: 2, programs: [
+    { program_id: "promo", program_type: "promotion", dataset_version: "1", rules: [{ source_product_id: 1, message: "" }] },
+  ] }), /thiếu message/);
 });

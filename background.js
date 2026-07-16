@@ -33,30 +33,58 @@ function validateDataset(dataset) {
   return CIRCA_CORE.validateDataset(dataset);
 }
 
+async function fetchRpc(name) {
+  const response = await fetch(`${CONFIG.supabaseUrl}/rest/v1/rpc/${name}`, {
+    method: "POST",
+    headers: { apikey: CONFIG.supabasePublishableKey, "Content-Type": "application/json" },
+    body: "{}",
+  });
+  if (!response.ok) { const error = new Error(`Supabase ${name} HTTP ${response.status}`); error.status = response.status; throw error; }
+  return response.json();
+}
+function legacyBundle(dataset) {
+  return {
+    schema_version: 2,
+    bundle_version: `legacy:${dataset.dataset_version}`,
+    generated_at: new Date().toISOString(),
+    programs: [{
+      program_id: "legacy-consultation", program_type: "consultation", program_name: "Tư vấn bán kèm",
+      display_title: "Gợi ý tư vấn bán kèm", dataset_version: dataset.dataset_version, published_at: dataset.published_at,
+      effective_from: null, effective_to: null, lifecycle_status: "active", source_filename: null, source_sheet_name: null,
+      checksum: dataset.checksum, row_count: dataset.row_count, rules: dataset.rules,
+    }],
+  };
+}
 async function syncDataset() {
   const startedAt = new Date().toISOString();
   try {
-    const response = await fetch(`${CONFIG.supabaseUrl}/rest/v1/rpc/get_latest_dataset`, {
-      method: "POST",
-      headers: { apikey: CONFIG.supabasePublishableKey, "Content-Type": "application/json" },
-      body: "{}",
-    });
-    if (!response.ok) throw new Error(`Supabase HTTP ${response.status}`);
-    const dataset = validateDataset(await response.json());
-    if (!dataset.dataset_version) throw new Error("Supabase chưa có dataset published.");
-    const current = await storageGet(["consultationDataset"]);
-    const changed = current.consultationDataset?.dataset_version !== dataset.dataset_version;
+    let bundle;
+    try { bundle = CIRCA_CORE.validateProgramBundle(await fetchRpc("get_program_bundle")); }
+    catch (error) {
+      if (![400, 404].includes(error.status)) throw error;
+      const legacy = validateDataset(await fetchRpc("get_latest_dataset"));
+      if (!legacy.dataset_version) throw new Error("Supabase chưa có dữ liệu được publish.");
+      bundle = CIRCA_CORE.validateProgramBundle(legacyBundle(legacy));
+    }
+    const current = await storageGet(["programBundle"]);
+    const changed = current.programBundle?.bundle_version !== bundle.bundle_version;
+    const consultation = bundle.programs.find(item => item.program_type === "consultation") || null;
+    const consultationDataset = consultation ? {
+      schema_version: 1, dataset_version: consultation.dataset_version, published_at: consultation.published_at,
+      checksum: consultation.checksum, row_count: consultation.row_count, rules: consultation.rules,
+    } : null;
     await storageSet({
-      consultationDataset: dataset,
-      datasetSyncStatus: { ok: true, changed, version: dataset.dataset_version, syncedAt: new Date().toISOString(), error: null },
+      programBundle: bundle,
+      consultationDataset,
+      datasetSyncStatus: { ok: true, changed, version: bundle.bundle_version, programCount: bundle.programs.length,
+        syncedAt: new Date().toISOString(), error: null },
     });
-    return { ok: true, changed, dataset };
+    return { ok: true, changed, bundle };
   } catch (error) {
     await storageSet({ datasetSyncStatus: { ok: false, syncedAt: startedAt, error: error.message } });
     return { ok: false, error: error.message };
   }
 }
-
 function normalizeIds(values) {
   return [...new Set((values || []).map(Number).filter(id => Number.isInteger(id) && id > 0))];
 }
@@ -155,7 +183,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     .then(sendResponse)
     .catch(error => sendResponse({ ok: false, code: error.code || "UNEXPECTED_ERROR", error: error.message || "Extension gặp lỗi không xác định." }));
   if (message?.type === "SYNC_DATASET") { respond(syncDataset()); return true; }
-  if (message?.type === "GET_DATASET") { respond(storageGet(["consultationDataset", "datasetSyncStatus"])); return true; }
+  if (message?.type === "GET_DATASET") { respond(storageGet(["programBundle", "consultationDataset", "datasetSyncStatus"])); return true; }
   if (message?.type === "CHECK_STOCK") { respond(fetchStock(message.payload || {})); return true; }
   return false;
 });
