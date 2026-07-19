@@ -648,3 +648,22 @@ test("combo implementation keeps the file schema minimal and stock informational
   assert.match(migration, /Asia\/Ho_Chi_Minh/);
   assert.match(migration, /interval '1 month'/);
 });
+
+test("admin portal provides a downloadable template for every program type", () => {
+  const portal = fs.readFileSync("admin-portal/app.js", "utf8");
+  const html = fs.readFileSync("admin-portal/index.html", "utf8");
+  assert.match(html, /id="download-template"/);
+  for (const type of [
+    "consultation",
+    "promotion",
+    "marketing",
+    "near_expiry",
+    "combo",
+  ]) {
+    assert.match(portal, new RegExp(type + ":"));
+  }
+  assert.match(portal, /XLSX\.writeFile/);
+  assert.match(portal, /source_product_id/);
+  assert.match(portal, /combo_id/);
+  assert.match(portal, /sub_product_id/);
+});

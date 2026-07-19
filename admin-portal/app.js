@@ -11,6 +11,108 @@
     versions: [],
     bundle: null,
   };
+  const TEMPLATE_DEFINITIONS = Object.freeze({
+    consultation: {
+      sheet: "consultation_rules",
+      filename: "circa-tu-van-ban-kem-template.xlsx",
+      headers: [
+        "source_product_id",
+        "source_product_name",
+        "suggested_product_id",
+        "suggested_product_name",
+        "consultation_title",
+        "consultation_note",
+      ],
+      rows: [
+        {
+          source_product_id: 1001,
+          source_product_name: "Sản phẩm nguồn mẫu",
+          suggested_product_id: 2001,
+          suggested_product_name: "Sản phẩm gợi ý mẫu",
+          consultation_title: "Tư vấn bán kèm",
+          consultation_note: "Nội dung dược sĩ cần tư vấn cho khách",
+        },
+      ],
+      widths: [20, 34, 22, 34, 24, 52],
+    },
+    promotion: {
+      sheet: "promotion_rules",
+      filename: "circa-khuyen-mai-template.xlsx",
+      headers: [
+        "source_product_id",
+        "related_product_id",
+        "message",
+        "related_message",
+      ],
+      rows: [
+        {
+          source_product_id: 2001719,
+          related_product_id: 2001719,
+          message: "Mua 2 tặng 1. POS tự áp dụng khi đủ điều kiện.",
+          related_message: "",
+        },
+      ],
+      widths: [20, 22, 54, 54],
+    },
+    marketing: {
+      sheet: "marketing_rules",
+      filename: "circa-marketing-template.xlsx",
+      headers: [
+        "source_product_id",
+        "related_product_id",
+        "message",
+        "related_message",
+      ],
+      rows: [
+        {
+          source_product_id: 1001,
+          related_product_id: "",
+          message: "Nội dung chương trình Marketing cần thông báo",
+          related_message: "",
+        },
+      ],
+      widths: [20, 22, 54, 54],
+    },
+    near_expiry: {
+      sheet: "near_expiry_rules",
+      filename: "circa-can-date-template.xlsx",
+      headers: [
+        "source_product_id",
+        "related_product_id",
+        "message",
+        "related_message",
+      ],
+      rows: [
+        {
+          source_product_id: 1001,
+          related_product_id: "",
+          message: "Sản phẩm thuộc chương trình đẩy bán cận date",
+          related_message: "",
+        },
+      ],
+      widths: [20, 22, 54, 54],
+    },
+    combo: {
+      sheet: "combo_rules",
+      filename: "circa-combo-template.xlsx",
+      headers: ["combo_id", "sub_product_id", "message"],
+      rows: [
+        {
+          combo_id: 999902925,
+          sub_product_id: 60559,
+          message:
+            "Tư vấn bán kèm: Combo 2 Ferrovit C Mega (hộp/30 viên nang) - hộp",
+        },
+        {
+          combo_id: 999902925,
+          sub_product_id: 200419,
+          message:
+            "Tư vấn bán kèm: Combo 2 Ferrovit C Mega (hộp/30 viên nang) - hộp",
+        },
+      ],
+      widths: [18, 20, 72],
+    },
+  });
   function toast(message) {
     const el = $("toast");
     el.textContent = message;
@@ -243,6 +345,27 @@
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("");
   }
+  function downloadTemplate() {
+    const type = $("program-type").value;
+    const definition = TEMPLATE_DEFINITIONS[type];
+    if (!definition) throw new Error("Chưa có file mẫu cho loại chương trình này.");
+    const workbook = XLSX.utils.book_new();
+    const sheet = XLSX.utils.json_to_sheet(definition.rows, {
+      header: definition.headers,
+    });
+    sheet["!cols"] = definition.widths.map((wch) => ({ wch }));
+    sheet["!autofilter"] = {
+      ref: "A1:" +
+        XLSX.utils.encode_col(definition.headers.length - 1) +
+        (definition.rows.length + 1),
+    };
+    XLSX.utils.book_append_sheet(workbook, sheet, definition.sheet);
+    XLSX.writeFile(workbook, definition.filename, {
+      bookType: "xlsx",
+      compression: true,
+    });
+    toast("Đã tạo file mẫu " + typeName(type) + ".");
+  }
   async function processSheet(name) {
     const raw = XLSX.utils.sheet_to_json(state.workbook.book.Sheets[name], {
       defval: "",
@@ -354,7 +477,9 @@
         ? "Excel chỉ gồm: combo_id, sub_product_id, message. Hiệu lực tự động trong tháng " +
           comboMonthLabel() +
           " theo giờ Việt Nam; không cần cột thời gian."
-        : "Excel chỉ yêu cầu: source_product_id, message. Tùy chọn: related_product_id, related_message.";
+      : "Excel chỉ yêu cầu: source_product_id, message. Tùy chọn: related_product_id, related_message.";
+    $("download-template").textContent =
+      "Tải file mẫu · " + typeName(type);
     renderProgramSelect();
     clearFile();
   }
@@ -521,6 +646,13 @@
   $("logout").onclick = () => saveSession(null);
   $("refresh").onclick = () => loadDashboard().catch(handleError);
   $("program-type").onchange = editorTypeChanged;
+  $("download-template").onclick = () => {
+    try {
+      downloadTemplate();
+    } catch (error) {
+      handleError(error);
+    }
+  };
   $("dataset-file").onchange = (e) => {
     const file = e.target.files?.[0];
     if (file)
