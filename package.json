@@ -1,6 +1,6 @@
 {
   "name": "circa-consult-extension",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "private": true,
   "scripts": {
     "test": "node --test --test-isolation=none tests/core.test.js",

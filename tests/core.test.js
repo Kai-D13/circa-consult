@@ -52,6 +52,7 @@ test("suggestion card exposes product ID and uses the balanced panel size", () =
   assert.match(contentScript, /ccp-suggestion-id/);
   assert.match(contentScript, /match\.rule\.suggested_product_id/);
   assert.match(contentScript, /Thông tin hỗ trợ bán hàng/);
+  assert.doesNotMatch(contentScript, /ccp-program-title/);
   assert.match(contentStyles, /width: min\(440px, calc\(100% - 24px\)\)/);
   assert.match(contentStyles, /max-height: min\(56vh, 500px\)/);
 });
@@ -286,4 +287,13 @@ test("reject invalid promotion rules", () => {
   assert.throws(() => core.validateProgramBundle({ schema_version: 2, programs: [
     { program_id: "promo", program_type: "promotion", dataset_version: "1", rules: [{ source_product_id: 1, message: "" }] },
   ] }), /thiếu message/);
+});
+
+test("old version deletion is available but published versions are protected", () => {
+  const portal = fs.readFileSync("admin-portal/app.js", "utf8");
+  const migration = fs.readFileSync("supabase/migrations/20260717113000_delete_old_dataset_versions.sql", "utf8");
+  assert.match(portal, /delete_dataset_version/);
+  assert.match(portal, /data-delete-version/);
+  assert.match(migration, /target_status = 'published'/);
+  assert.match(migration, /Published version must be stopped before deletion/);
 });

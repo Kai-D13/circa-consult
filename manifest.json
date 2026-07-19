@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Circa POS - Hỗ trợ chương trình bán hàng",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Đồng bộ chương trình tư vấn, khuyến mãi và marketing theo product ID; kiểm tra tồn kho tại POS.",
   "icons": {
     "16": "icons/icon-16.png",
