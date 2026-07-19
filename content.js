@@ -1,64 +1,601 @@
 (function () {
   "use strict";
-  const TABLE_SELECTOR="#table-order-items-offline", PANEL_ID="circa-consult-panel";
-  const PRODUCT_NAME_SELECTORS=["td:nth-child(2) p.font-semibold","td:nth-child(2) [class*='font-semibold']"];
-  const FALLBACK_SCAN_MS=3000, MESSAGE_TIMEOUT_MS=25000, MAX_UI_RETRIES=2;
-  let bundle=null, tableObserver=null, observedTable=null, scanTimer=null, layoutTimer=null, retryTimer=null;
-  let cartRevision=0, requestSequence=0, lastScanKey="", dismissedProductSignature="", minimized=false;
-  let retryState={signature:"",attempts:0}, scanInFlight=false, queuedScan=false;
-  function sendMessage(message,timeoutMs=MESSAGE_TIMEOUT_MS){return new Promise(resolve=>{let settled=false;const finish=r=>{if(settled)return;settled=true;clearTimeout(timer);resolve(r)};const timer=setTimeout(()=>finish({ok:false,code:"MESSAGE_TIMEOUT",error:"Extension không nhận được phản hồi đúng hạn."}),timeoutMs);try{chrome.runtime.sendMessage(message,response=>{if(chrome.runtime.lastError)finish({ok:false,code:"MESSAGE_ERROR",error:chrome.runtime.lastError.message});else finish(response||{ok:false,code:"EMPTY_RESPONSE",error:"Extension không trả response."})})}catch(error){finish({ok:false,code:"MESSAGE_ERROR",error:error.message})}})}
-  function readJsonStorage(key){try{return JSON.parse(localStorage.getItem(key)||"null")}catch(_){return null}}
-  function readSessionToken(){const raw=document.cookie.split("; ").find(v=>v.startsWith("session_token="));if(!raw)return null;const value=raw.split("=").slice(1).join("=");try{return decodeURIComponent(value)}catch(_){return value}}
-  function productFromRow(row){for(const selector of PRODUCT_NAME_SELECTORS){const product=CIRCA_CORE.parseProductLabel(row.querySelector(selector)?.textContent);if(product)return product}for(const line of String(row.innerText||"").split(/\r?\n/)){const product=CIRCA_CORE.parseProductLabel(line);if(product)return product}return null}
-  function extractCartProducts(table){const products=[];table?.querySelectorAll("tbody tr").forEach((row,index)=>{const product=productFromRow(row);if(!product)return;const shown=Number.parseInt(row.querySelector("td:first-child")?.textContent?.trim()||"",10);products.push({...product,cartPosition:Number.isInteger(shown)&&shown>0?shown:index+1})});return products}
-  function escapeHtml(value){const node=document.createElement("div");node.textContent=value==null?"":value;return node.innerHTML}
-  function formatPrice(value){return Number(value).toLocaleString("vi-VN")+" đ"}
-  function productSignature(products){return products.map(p=>p.productId).sort((a,b)=>a-b).join(",")}
-  function activePrograms(){return (bundle?.programs||[]).filter(p=>CIRCA_CORE.programLifecycle(p)==="active")}
-  function matchesForCart(products){
-    const cartIds=new Set(products.map(p=>p.productId)); const byId=new Map(products.map(p=>[p.productId,p])); const matches=[];
-    activePrograms().forEach(program=>{
-      if(program.program_type==="consultation"){
-        const seen=new Set();
-        program.rules.filter(r=>cartIds.has(Number(r.source_product_id))&&!cartIds.has(Number(r.suggested_product_id))).forEach(rule=>{
-          const id=Number(rule.suggested_product_id);if(seen.has(id))return;seen.add(id);const source=byId.get(Number(rule.source_product_id));
-          matches.push({kind:"consultation",program,rule,cartPosition:source?.cartPosition||999,sourceName:source?.productName||rule.source_product_name,checkProductId:id});
+  const TABLE_SELECTOR = "#table-order-items-offline",
+    PANEL_ID = "circa-consult-panel";
+  const PRODUCT_NAME_SELECTORS = [
+    "td:nth-child(2) p.font-semibold",
+    "td:nth-child(2) [class*='font-semibold']",
+  ];
+  const FALLBACK_SCAN_MS = 3000,
+    MESSAGE_TIMEOUT_MS = 25000,
+    MAX_UI_RETRIES = 2;
+  let bundle = null,
+    tableObserver = null,
+    observedTable = null,
+    scanTimer = null,
+    layoutTimer = null,
+    retryTimer = null;
+  let cartRevision = 0,
+    requestSequence = 0,
+    lastScanKey = "",
+    dismissedProductSignature = "",
+    minimized = false;
+  let retryState = { signature: "", attempts: 0 },
+    scanInFlight = false,
+    queuedScan = false;
+  function sendMessage(message, timeoutMs = MESSAGE_TIMEOUT_MS) {
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (r) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(r);
+      };
+      const timer = setTimeout(
+        () =>
+          finish({
+            ok: false,
+            code: "MESSAGE_TIMEOUT",
+            error: "Extension không nhận được phản hồi đúng hạn.",
+          }),
+        timeoutMs,
+      );
+      try {
+        chrome.runtime.sendMessage(message, (response) => {
+          if (chrome.runtime.lastError)
+            finish({
+              ok: false,
+              code: "MESSAGE_ERROR",
+              error: chrome.runtime.lastError.message,
+            });
+          else
+            finish(
+              response || {
+                ok: false,
+                code: "EMPTY_RESPONSE",
+                error: "Extension không trả response.",
+              },
+            );
         });
-      } else program.rules.forEach(rule=>{
-        const sourceId=Number(rule.source_product_id), relatedId=rule.related_product_id==null?null:Number(rule.related_product_id);
-        if(cartIds.has(sourceId)){const source=byId.get(sourceId);matches.push({kind:"program",direction:"source",program,rule,cartPosition:source.cartPosition,sourceName:source.productName,message:rule.message,checkProductId:relatedId});}
-        if(relatedId&&relatedId!==sourceId&&rule.related_message&&cartIds.has(relatedId)){const source=byId.get(relatedId);matches.push({kind:"program",direction:"related",program,rule,cartPosition:source.cartPosition,sourceName:source.productName,message:rule.related_message,checkProductId:sourceId});}
+      } catch (error) {
+        finish({ ok: false, code: "MESSAGE_ERROR", error: error.message });
+      }
+    });
+  }
+  function readJsonStorage(key) {
+    try {
+      return JSON.parse(localStorage.getItem(key) || "null");
+    } catch (_) {
+      return null;
+    }
+  }
+  function readSessionToken() {
+    const raw = document.cookie
+      .split("; ")
+      .find((v) => v.startsWith("session_token="));
+    if (!raw) return null;
+    const value = raw.split("=").slice(1).join("=");
+    try {
+      return decodeURIComponent(value);
+    } catch (_) {
+      return value;
+    }
+  }
+  function productFromRow(row) {
+    for (const selector of PRODUCT_NAME_SELECTORS) {
+      const product = CIRCA_CORE.parseProductLabel(
+        row.querySelector(selector)?.textContent,
+      );
+      if (product) return product;
+    }
+    for (const line of String(row.innerText || "").split(/\r?\n/)) {
+      const product = CIRCA_CORE.parseProductLabel(line);
+      if (product) return product;
+    }
+    return null;
+  }
+  function extractCartProducts(table) {
+    const products = [];
+    table?.querySelectorAll("tbody tr").forEach((row, index) => {
+      const product = productFromRow(row);
+      if (!product) return;
+      const shown = Number.parseInt(
+        row.querySelector("td:first-child")?.textContent?.trim() || "",
+        10,
+      );
+      products.push({
+        ...product,
+        cartPosition: Number.isInteger(shown) && shown > 0 ? shown : index + 1,
       });
     });
-    return matches.sort((a,b)=>a.cartPosition-b.cartPosition||a.program.program_type.localeCompare(b.program.program_type));
+    return products;
   }
-  function findCartPlacement(){const table=document.querySelector(TABLE_SELECTOR);if(!table)return null;const host=table.closest("form")||table.parentElement;return host?{host,table}:null}
-  function placePanel(panel){const placement=findCartPlacement();if(placement){document.querySelectorAll(".ccp-cart-host").forEach(h=>{if(h!==placement.host)h.classList.remove("ccp-cart-host")});placement.host.classList.add("ccp-cart-host");panel.classList.remove("ccp-floating");if(panel.parentElement!==placement.host)placement.host.appendChild(panel);return}panel.classList.add("ccp-floating");if(panel.parentElement!==document.body)document.body.appendChild(panel)}
-  function getPanel(){let panel=document.getElementById(PANEL_ID);if(!panel){panel=document.createElement("aside");panel.id=PANEL_ID}placePanel(panel);return panel}
-  function removePanel(){document.getElementById(PANEL_ID)?.remove();document.querySelectorAll(".ccp-cart-host").forEach(h=>h.classList.remove("ccp-cart-host"))}
-  function bindPanel(panel,signature){panel.querySelector(".ccp-close")?.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();dismissedProductSignature=signature;removePanel()});panel.querySelector(".ccp-minimize")?.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();minimized=!minimized;panel.classList.toggle("ccp-minimized",minimized);panel.querySelector(".ccp-minimize").textContent=minimized?"+":"−"})}
-  function renderShell(signature,body,stateClass=""){const panel=getPanel();panel.className=`${minimized?"ccp-minimized ":""}${stateClass}`.trim();panel.innerHTML=`<div class="ccp-header"><span>✨ Thông tin hỗ trợ bán hàng</span><div><button type="button" class="ccp-minimize" title="Thu gọn">${minimized?"+":"−"}</button><button type="button" class="ccp-close" title="Đóng">×</button></div></div><div class="ccp-body">${body}</div>`;bindPanel(panel,signature);placePanel(panel)}
-  function stockMeta(stock){if(!stock)return"";const priceUnit=stock.priceUnitName&&stock.priceUnitName!==stock.unitName?` (${escapeHtml(stock.priceUnitName)})`:"";return `<div class="ccp-meta"><span class="ccp-stock">Tổng tồn: ${stock.availableQuantity}</span><span class="ccp-unit">Đơn vị tồn: ${escapeHtml(stock.unitName||"—")}</span><span class="ccp-price">Giá${priceUnit}: ${formatPrice(stock.finalPrice||0)}</span></div>`}
-  function typeLabel(type){return {promotion:"Khuyến mãi",marketing:"Marketing",near_expiry:"Cận date",consultation:"Tư vấn bán kèm"}[type]||type}
-  function renderMatches(signature,matches,stockResult){const groups=new Map();matches.forEach(m=>{const key=`${m.cartPosition}:${m.sourceName}`;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(m)});let visible=0;
-    const html=[...groups.values()].map(group=>{const first=group[0];const cards=group.map(match=>{const stock=match.checkProductId?stockResult.products?.[match.checkProductId]:null;
-      if(match.kind==="consultation"){if(!stock?.available)return"";visible++;const note=String(match.rule.consultation_note||"").trim();return `<li><span class="ccp-type ccp-type-consultation">Tư vấn bán kèm</span><div class="ccp-suggestion-name">${escapeHtml(match.rule.suggested_product_name)}</div><div class="ccp-suggestion-id">Product ID: ${escapeHtml(match.rule.suggested_product_id)}</div>${note?`<div class="ccp-note"><span>Gợi ý tư vấn</span>${escapeHtml(note)}</div>`:""}${stockMeta(stock)}</li>`}
-      visible++;const unavailable=match.checkProductId&&!stock?.available;const relatedName=stock?.productName;return `<li class="ccp-program-card ${unavailable?"ccp-unavailable":""}"><span class="ccp-type ccp-type-${escapeHtml(match.program.program_type)}">${escapeHtml(typeLabel(match.program.program_type))}</span><div class="ccp-program-message">${escapeHtml(match.message)}</div>${match.checkProductId?`<div class="ccp-suggestion-id">Product ID liên quan: ${match.checkProductId}</div>${relatedName?`<div class="ccp-related-name">${escapeHtml(relatedName)}</div>`:""}`:""}${unavailable?`<div class="ccp-stock-warning">Sản phẩm/quà tặng hiện không còn tồn khả dụng tại POS này. Không cam kết ưu đãi với khách.</div>`:stockMeta(stock)}<div class="ccp-period">Hiệu lực đến ${escapeHtml(new Date(match.program.effective_to).toLocaleString("vi-VN"))}</div></li>`}).join("");if(!cards)return"";return `<section class="ccp-group"><div class="ccp-group-title"><span class="ccp-source-index">${first.cartPosition}</span><span>Khi bán: ${escapeHtml(first.sourceName)}</span></div><ul>${cards}</ul></section>`}).join("");
-    if(!visible){removePanel();return}renderShell(signature,html,"ccp-state-ready")}
-  function renderWarning(signature,message){renderShell(signature,`<div class="ccp-warning">${escapeHtml(message)}</div>`,"ccp-state-warning")}
-  function scheduleRetry(signature){if(retryState.signature!==signature)retryState={signature,attempts:0};if(retryState.attempts>=MAX_UI_RETRIES)return;retryState.attempts++;clearTimeout(retryTimer);retryTimer=setTimeout(()=>scanCart(true).catch(()=>{}),1500*retryState.attempts)}
-  async function executeScan(force=false){if(!CIRCA_CORE.isSalesPathname(location.pathname)){removePanel();return}const revision=cartRevision;const products=extractCartProducts(document.querySelector(TABLE_SELECTOR));const signature=productSignature(products);const scanKey=`${location.pathname}|${signature}|${cartRevision}|${bundle?.bundle_version||""}`;if(!force&&scanKey===lastScanKey)return;lastScanKey=scanKey;const sequence=++requestSequence;if(signature!==dismissedProductSignature)dismissedProductSignature="";if(!products.length){removePanel();return}
-    if(!bundle){const stored=await sendMessage({type:"GET_DATASET"});bundle=stored.programBundle||null}if(!bundle){renderWarning(signature,"Đang chờ đồng bộ dữ liệu chương trình. Extension sẽ tự thử lại.");scheduleRetry(signature);return}const matches=matchesForCart(products);if(!matches.length||dismissedProductSignature===signature){removePanel();return}
-    const posConfig=readJsonStorage("pos_config"),entity=readJsonStorage("entity"),selectedStore=localStorage.getItem("storesClicked");if(!posConfig?.pos_id||(entity?.id&&entity.id!==posConfig.pos_id)||(selectedStore&&selectedStore!==posConfig.pos_id)){renderWarning(signature,"Chưa xác định được đúng cửa hàng bán hàng. Extension sẽ tự thử lại.");scheduleRetry(signature);return}
-    const ids=[...new Set(matches.map(m=>m.checkProductId).filter(Boolean))];let stockResult={ok:true,products:{}};if(ids.length){renderShell(signature,`<div class="ccp-loading"><span class="ccp-spinner"></span>Đang kiểm tra tồn kho ${ids.length} sản phẩm…</div>`,"ccp-state-loading");stockResult=await sendMessage({type:"CHECK_STOCK",payload:{productIds:ids,sessionToken:readSessionToken(),posId:posConfig.pos_id,salesLocationId:posConfig.auto_put_location,posOrigin:location.origin}})}
-    if(sequence!==requestSequence||revision!==cartRevision)return;if(!stockResult?.ok){const retryable=!["UNAUTHORIZED","NO_SESSION"].includes(stockResult?.code);renderWarning(signature,`${stockResult?.error||"Không kiểm tra được tồn kho."}${retryable?" Extension sẽ tự thử lại.":""}`);if(retryable)scheduleRetry(signature);return}retryState={signature,attempts:0};renderMatches(signature,matches,stockResult)}
-  async function scanCart(force=false){if(scanInFlight){queuedScan=true;return}scanInFlight=true;try{await executeScan(force)}finally{scanInFlight=false;if(queuedScan){queuedScan=false;setTimeout(()=>scanCart(true).catch(e=>renderWarning("",`Extension gặp lỗi: ${e.message}`)),0)}}}
-  function scheduleScan(){clearTimeout(scanTimer);scanTimer=setTimeout(()=>scanCart().catch(e=>renderWarning("",`Extension gặp lỗi: ${e.message}`)),180)}
-  function detachCartObserver(){tableObserver?.disconnect();tableObserver=null;observedTable=null}
-  function attachCartObserver(){const table=document.querySelector(TABLE_SELECTOR);if(!table||table===observedTable)return;tableObserver?.disconnect();observedTable=table;tableObserver=new MutationObserver(()=>{cartRevision++;scheduleScan()});tableObserver.observe(table,{childList:true,subtree:true,characterData:true});cartRevision++;lastScanKey="";scheduleScan()}
-  function ensureLayout(){if(!CIRCA_CORE.isSalesPathname(location.pathname)){detachCartObserver();removePanel();return}attachCartObserver();const panel=document.getElementById(PANEL_ID);if(panel)placePanel(panel)}
-  function scheduleLayout(){clearTimeout(layoutTimer);layoutTimer=setTimeout(ensureLayout,100)}
-  chrome.storage.onChanged.addListener((changes,area)=>{if(area==="local"&&changes.programBundle){bundle=changes.programBundle.newValue||null;lastScanKey="";scanCart(true).catch(()=>{})}});
-  sendMessage({type:"GET_DATASET"}).then(result=>{bundle=result.programBundle||null;ensureLayout();sendMessage({type:"SYNC_DATASET"}).then(sync=>{if(sync?.ok)bundle=sync.bundle;lastScanKey="";scanCart(true).catch(()=>{})})});
-  new MutationObserver(scheduleLayout).observe(document.documentElement,{childList:true,subtree:true});setInterval(ensureLayout,1000);setInterval(()=>{if(observedTable&&!scanInFlight)scanCart(false).catch(()=>{})},FALLBACK_SCAN_MS);
+  function escapeHtml(value) {
+    const node = document.createElement("div");
+    node.textContent = value == null ? "" : value;
+    return node.innerHTML;
+  }
+  function formatPrice(value) {
+    return Number(value).toLocaleString("vi-VN") + " đ";
+  }
+  function productSignature(products) {
+    return products
+      .map((p) => p.productId)
+      .sort((a, b) => a - b)
+      .join(",");
+  }
+  function activePrograms() {
+    return (bundle?.programs || []).filter(
+      (p) => CIRCA_CORE.programLifecycle(p) === "active",
+    );
+  }
+  function matchesForCart(products) {
+    const cartIds = new Set(products.map((p) => p.productId));
+    const byId = new Map(products.map((p) => [p.productId, p]));
+    const matches = [];
+    activePrograms().forEach((program) => {
+      if (program.program_type === "combo") {
+        CIRCA_CORE.comboGroups(program).forEach((combo) => {
+          const selected = combo.members
+            .map((id) => byId.get(id))
+            .filter(Boolean)
+            .sort((a, b) => a.cartPosition - b.cartPosition);
+          if (!selected.length) return;
+          const source = selected[0];
+          matches.push({
+            kind: "combo",
+            program,
+            comboId: combo.comboId,
+            message: combo.message,
+            memberIds: combo.members,
+            selectedMemberIds: selected.map((item) => item.productId),
+            cartPosition: source.cartPosition,
+            sourceName: source.productName,
+          });
+        });
+        return;
+      }
+      if (program.program_type === "consultation") {
+        const seen = new Set();
+        program.rules
+          .filter(
+            (r) =>
+              cartIds.has(Number(r.source_product_id)) &&
+              !cartIds.has(Number(r.suggested_product_id)),
+          )
+          .forEach((rule) => {
+            const id = Number(rule.suggested_product_id);
+            if (seen.has(id)) return;
+            seen.add(id);
+            const source = byId.get(Number(rule.source_product_id));
+            matches.push({
+              kind: "consultation",
+              program,
+              rule,
+              cartPosition: source?.cartPosition || 999,
+              sourceName: source?.productName || rule.source_product_name,
+              checkProductId: id,
+            });
+          });
+      } else
+        program.rules.forEach((rule) => {
+          const sourceId = Number(rule.source_product_id),
+            relatedId =
+              rule.related_product_id == null
+                ? null
+                : Number(rule.related_product_id);
+          if (cartIds.has(sourceId)) {
+            const source = byId.get(sourceId);
+            matches.push({
+              kind: "program",
+              direction: "source",
+              program,
+              rule,
+              cartPosition: source.cartPosition,
+              sourceName: source.productName,
+              message: rule.message,
+              checkProductId: relatedId,
+            });
+          }
+          if (
+            relatedId &&
+            relatedId !== sourceId &&
+            rule.related_message &&
+            cartIds.has(relatedId)
+          ) {
+            const source = byId.get(relatedId);
+            matches.push({
+              kind: "program",
+              direction: "related",
+              program,
+              rule,
+              cartPosition: source.cartPosition,
+              sourceName: source.productName,
+              message: rule.related_message,
+              checkProductId: sourceId,
+            });
+          }
+        });
+    });
+    return matches.sort(
+      (a, b) =>
+        a.cartPosition - b.cartPosition ||
+        a.program.program_type.localeCompare(b.program.program_type),
+    );
+  }
+  function findCartPlacement() {
+    const table = document.querySelector(TABLE_SELECTOR);
+    if (!table) return null;
+    const host = table.closest("form") || table.parentElement;
+    return host ? { host, table } : null;
+  }
+  function placePanel(panel) {
+    const placement = findCartPlacement();
+    if (placement) {
+      document.querySelectorAll(".ccp-cart-host").forEach((h) => {
+        if (h !== placement.host) h.classList.remove("ccp-cart-host");
+      });
+      placement.host.classList.add("ccp-cart-host");
+      panel.classList.remove("ccp-floating");
+      if (panel.parentElement !== placement.host)
+        placement.host.appendChild(panel);
+      return;
+    }
+    panel.classList.add("ccp-floating");
+    if (panel.parentElement !== document.body) document.body.appendChild(panel);
+  }
+  function getPanel() {
+    let panel = document.getElementById(PANEL_ID);
+    if (!panel) {
+      panel = document.createElement("aside");
+      panel.id = PANEL_ID;
+    }
+    placePanel(panel);
+    return panel;
+  }
+  function removePanel() {
+    document.getElementById(PANEL_ID)?.remove();
+    document
+      .querySelectorAll(".ccp-cart-host")
+      .forEach((h) => h.classList.remove("ccp-cart-host"));
+  }
+  function bindPanel(panel, signature) {
+    panel.querySelector(".ccp-close")?.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dismissedProductSignature = signature;
+      removePanel();
+    });
+    panel.querySelector(".ccp-minimize")?.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      minimized = !minimized;
+      panel.classList.toggle("ccp-minimized", minimized);
+      panel.querySelector(".ccp-minimize").textContent = minimized ? "+" : "−";
+    });
+  }
+  function renderShell(signature, body, stateClass = "") {
+    const panel = getPanel();
+    panel.className =
+      `${minimized ? "ccp-minimized " : ""}${stateClass}`.trim();
+    panel.innerHTML = `<div class="ccp-header"><span>✨ Thông tin hỗ trợ bán hàng</span><div><button type="button" class="ccp-minimize" title="Thu gọn">${minimized ? "+" : "−"}</button><button type="button" class="ccp-close" title="Đóng">×</button></div></div><div class="ccp-body">${body}</div>`;
+    bindPanel(panel, signature);
+    placePanel(panel);
+  }
+  function stockMeta(stock) {
+    if (!stock) return "";
+    const priceUnit =
+      stock.priceUnitName && stock.priceUnitName !== stock.unitName
+        ? ` (${escapeHtml(stock.priceUnitName)})`
+        : "";
+    return `<div class="ccp-meta"><span class="ccp-stock">Tổng tồn: ${stock.availableQuantity}</span><span class="ccp-unit">Đơn vị tồn: ${escapeHtml(stock.unitName || "—")}</span><span class="ccp-price">Giá${priceUnit}: ${formatPrice(stock.finalPrice || 0)}</span></div>`;
+  }
+  function typeLabel(type) {
+    return (
+      {
+        promotion: "Khuyến mãi",
+        marketing: "Marketing",
+        near_expiry: "Cận date",
+        consultation: "Tư vấn bán kèm",
+        combo: "Combo",
+      }[type] || type
+    );
+  }
+  function renderComboCard(match, stockResult) {
+    const selected = new Set(match.selectedMemberIds);
+    const members = match.memberIds
+      .map((id) => {
+        const stock = stockResult.products?.[id];
+        const hasStock = Number(stock?.availableQuantity) > 0;
+        const selectedText = selected.has(id)
+          ? '<span class="ccp-combo-selected">Đã chọn</span>'
+          : "";
+        const stockText = !stock
+          ? "Chưa kiểm tra"
+          : hasStock
+            ? "Còn " +
+              stock.availableQuantity +
+              " " +
+              escapeHtml(stock.unitName || "")
+            : "Hết tồn";
+        const stockClass = !stock
+          ? "unknown"
+          : hasStock
+            ? "available"
+            : "unavailable";
+        return (
+          '<div class="ccp-combo-member"><span class="ccp-combo-id">ID ' +
+          id +
+          '</span><span class="ccp-combo-state ' +
+          stockClass +
+          '">' +
+          stockText +
+          "</span>" +
+          selectedText +
+          "</div>"
+        );
+      })
+      .join("");
+    return (
+      '<li class="ccp-program-card ccp-combo-card"><div class="ccp-combo-head"><span class="ccp-type ccp-type-combo">Combo</span><span class="ccp-combo-code">#' +
+      match.comboId +
+      '</span></div><div class="ccp-program-message">' +
+      escapeHtml(match.message) +
+      '</div><div class="ccp-combo-members">' +
+      members +
+      "</div></li>"
+    );
+  }
+  function renderMatches(signature, matches, stockResult) {
+    const groups = new Map();
+    matches.forEach((m) => {
+      const key = `${m.cartPosition}:${m.sourceName}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(m);
+    });
+    let visible = 0;
+    const html = [...groups.values()]
+      .map((group) => {
+        const first = group[0];
+        const cards = group
+          .map((match) => {
+            const stock = match.checkProductId
+              ? stockResult.products?.[match.checkProductId]
+              : null;
+            if (match.kind === "combo") {
+              visible++;
+              return renderComboCard(match, stockResult);
+            }
+            if (match.kind === "consultation") {
+              if (!stock?.available) return "";
+              visible++;
+              const note = String(match.rule.consultation_note || "").trim();
+              return `<li><span class="ccp-type ccp-type-consultation">Tư vấn bán kèm</span><div class="ccp-suggestion-name">${escapeHtml(match.rule.suggested_product_name)}</div><div class="ccp-suggestion-id">Product ID: ${escapeHtml(match.rule.suggested_product_id)}</div>${note ? `<div class="ccp-note"><span>Gợi ý tư vấn</span>${escapeHtml(note)}</div>` : ""}${stockMeta(stock)}</li>`;
+            }
+            visible++;
+            const unavailable = match.checkProductId && !stock?.available;
+            const relatedName = stock?.productName;
+            return `<li class="ccp-program-card ${unavailable ? "ccp-unavailable" : ""}"><span class="ccp-type ccp-type-${escapeHtml(match.program.program_type)}">${escapeHtml(typeLabel(match.program.program_type))}</span><div class="ccp-program-message">${escapeHtml(match.message)}</div>${match.checkProductId ? `<div class="ccp-suggestion-id">Product ID liên quan: ${match.checkProductId}</div>${relatedName ? `<div class="ccp-related-name">${escapeHtml(relatedName)}</div>` : ""}` : ""}${unavailable ? `<div class="ccp-stock-warning">Sản phẩm/quà tặng hiện không còn tồn khả dụng tại POS này. Không cam kết ưu đãi với khách.</div>` : stockMeta(stock)}<div class="ccp-period">Hiệu lực đến ${escapeHtml(new Date(match.program.effective_to).toLocaleString("vi-VN"))}</div></li>`;
+          })
+          .join("");
+        if (!cards) return "";
+        return `<section class="ccp-group"><div class="ccp-group-title"><span class="ccp-source-index">${first.cartPosition}</span><span>Khi bán: ${escapeHtml(first.sourceName)}</span></div><ul>${cards}</ul></section>`;
+      })
+      .join("");
+    if (!visible) {
+      removePanel();
+      return;
+    }
+    renderShell(signature, html, "ccp-state-ready");
+  }
+  function renderWarning(signature, message) {
+    renderShell(
+      signature,
+      `<div class="ccp-warning">${escapeHtml(message)}</div>`,
+      "ccp-state-warning",
+    );
+  }
+  function scheduleRetry(signature) {
+    if (retryState.signature !== signature)
+      retryState = { signature, attempts: 0 };
+    if (retryState.attempts >= MAX_UI_RETRIES) return;
+    retryState.attempts++;
+    clearTimeout(retryTimer);
+    retryTimer = setTimeout(
+      () => scanCart(true).catch(() => {}),
+      1500 * retryState.attempts,
+    );
+  }
+  async function executeScan(force = false) {
+    if (!CIRCA_CORE.isSalesPathname(location.pathname)) {
+      removePanel();
+      return;
+    }
+    const revision = cartRevision;
+    const products = extractCartProducts(
+      document.querySelector(TABLE_SELECTOR),
+    );
+    const signature = productSignature(products);
+    const scanKey = `${location.pathname}|${signature}|${cartRevision}|${bundle?.bundle_version || ""}`;
+    if (!force && scanKey === lastScanKey) return;
+    lastScanKey = scanKey;
+    const sequence = ++requestSequence;
+    if (signature !== dismissedProductSignature) dismissedProductSignature = "";
+    if (!products.length) {
+      removePanel();
+      return;
+    }
+    if (!bundle) {
+      const stored = await sendMessage({ type: "GET_DATASET" });
+      bundle = stored.programBundle || null;
+    }
+    if (!bundle) {
+      renderWarning(
+        signature,
+        "Đang chờ đồng bộ dữ liệu chương trình. Extension sẽ tự thử lại.",
+      );
+      scheduleRetry(signature);
+      return;
+    }
+    const matches = matchesForCart(products);
+    if (!matches.length || dismissedProductSignature === signature) {
+      removePanel();
+      return;
+    }
+    const posConfig = readJsonStorage("pos_config"),
+      entity = readJsonStorage("entity"),
+      selectedStore = localStorage.getItem("storesClicked");
+    if (
+      !posConfig?.pos_id ||
+      (entity?.id && entity.id !== posConfig.pos_id) ||
+      (selectedStore && selectedStore !== posConfig.pos_id)
+    ) {
+      renderWarning(
+        signature,
+        "Chưa xác định được đúng cửa hàng bán hàng. Extension sẽ tự thử lại.",
+      );
+      scheduleRetry(signature);
+      return;
+    }
+    const ids = [
+      ...new Set(
+        matches
+          .flatMap((m) =>
+            m.kind === "combo" ? m.memberIds : [m.checkProductId],
+          )
+          .filter(Boolean),
+      ),
+    ];
+    let stockResult = { ok: true, products: {} };
+    if (ids.length) {
+      renderShell(
+        signature,
+        `<div class="ccp-loading"><span class="ccp-spinner"></span>Đang kiểm tra tồn kho ${ids.length} sản phẩm…</div>`,
+        "ccp-state-loading",
+      );
+      stockResult = await sendMessage({
+        type: "CHECK_STOCK",
+        payload: {
+          productIds: ids,
+          sessionToken: readSessionToken(),
+          posId: posConfig.pos_id,
+          salesLocationId: posConfig.auto_put_location,
+          posOrigin: location.origin,
+        },
+      });
+    }
+    if (sequence !== requestSequence || revision !== cartRevision) return;
+    if (!stockResult?.ok) {
+      const comboMatches = matches.filter((match) => match.kind === "combo");
+      if (comboMatches.length) {
+        renderMatches(signature, comboMatches, { products: {} });
+        return;
+      }
+      const retryable = !["UNAUTHORIZED", "NO_SESSION"].includes(
+        stockResult?.code,
+      );
+      renderWarning(
+        signature,
+        `${stockResult?.error || "Không kiểm tra được tồn kho."}${retryable ? " Extension sẽ tự thử lại." : ""}`,
+      );
+      if (retryable) scheduleRetry(signature);
+      return;
+    }
+    retryState = { signature, attempts: 0 };
+    renderMatches(signature, matches, stockResult);
+  }
+  async function scanCart(force = false) {
+    if (scanInFlight) {
+      queuedScan = true;
+      return;
+    }
+    scanInFlight = true;
+    try {
+      await executeScan(force);
+    } finally {
+      scanInFlight = false;
+      if (queuedScan) {
+        queuedScan = false;
+        setTimeout(
+          () =>
+            scanCart(true).catch((e) =>
+              renderWarning("", `Extension gặp lỗi: ${e.message}`),
+            ),
+          0,
+        );
+      }
+    }
+  }
+  function scheduleScan() {
+    clearTimeout(scanTimer);
+    scanTimer = setTimeout(
+      () =>
+        scanCart().catch((e) =>
+          renderWarning("", `Extension gặp lỗi: ${e.message}`),
+        ),
+      180,
+    );
+  }
+  function detachCartObserver() {
+    tableObserver?.disconnect();
+    tableObserver = null;
+    observedTable = null;
+  }
+  function attachCartObserver() {
+    const table = document.querySelector(TABLE_SELECTOR);
+    if (!table || table === observedTable) return;
+    tableObserver?.disconnect();
+    observedTable = table;
+    tableObserver = new MutationObserver(() => {
+      cartRevision++;
+      scheduleScan();
+    });
+    tableObserver.observe(table, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+    cartRevision++;
+    lastScanKey = "";
+    scheduleScan();
+  }
+  function ensureLayout() {
+    if (!CIRCA_CORE.isSalesPathname(location.pathname)) {
+      detachCartObserver();
+      removePanel();
+      return;
+    }
+    attachCartObserver();
+    const panel = document.getElementById(PANEL_ID);
+    if (panel) placePanel(panel);
+  }
+  function scheduleLayout() {
+    clearTimeout(layoutTimer);
+    layoutTimer = setTimeout(ensureLayout, 100);
+  }
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && changes.programBundle) {
+      bundle = changes.programBundle.newValue || null;
+      lastScanKey = "";
+      scanCart(true).catch(() => {});
+    }
+  });
+  sendMessage({ type: "GET_DATASET" }).then((result) => {
+    bundle = result.programBundle || null;
+    ensureLayout();
+    sendMessage({ type: "SYNC_DATASET" }).then((sync) => {
+      if (sync?.ok) bundle = sync.bundle;
+      lastScanKey = "";
+      scanCart(true).catch(() => {});
+    });
+  });
+  new MutationObserver(scheduleLayout).observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+  });
+  setInterval(ensureLayout, 1000);
+  setInterval(() => {
+    if (observedTable && !scanInFlight) scanCart(false).catch(() => {});
+  }, FALLBACK_SCAN_MS);
 })();

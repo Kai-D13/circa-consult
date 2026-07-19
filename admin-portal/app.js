@@ -1,21 +1,546 @@
-(function(){"use strict";const config=window.CIRCA_ADMIN_CONFIG,$=id=>document.getElementById(id);const LEGACY_ID="00000000-0000-4000-8000-000000000001";const state={session:null,pending:null,workbook:null,programs:[],versions:[],bundle:null};
-function toast(message){const el=$("toast");el.textContent=message;el.classList.add("show");setTimeout(()=>el.classList.remove("show"),4000)}function escapeHtml(v){const n=document.createElement("div");n.textContent=v??"";return n.innerHTML}function date(v){return v?new Date(v).toLocaleString("vi-VN"):"—"}function typeName(v){return{consultation:"Tư vấn bán kèm",promotion:"Khuyến mãi",marketing:"Marketing",near_expiry:"Cận date"}[v]||v}function lifecycle(v){const now=Date.now(),from=v.effective_from?Date.parse(v.effective_from):null,to=v.effective_to?Date.parse(v.effective_to):null;return Number.isFinite(from)&&now<from?"scheduled":Number.isFinite(to)&&now>to?"expired":"active"}
-async function request(path,options={}){const headers={apikey:config.supabasePublishableKey,"Content-Type":"application/json",...(options.headers||{})};if(state.session?.access_token)headers.Authorization=`Bearer ${state.session.access_token}`;const response=await fetch(`${config.supabaseUrl}${path}`,{...options,headers});const body=response.status===204?null:await response.json().catch(()=>null);if(!response.ok)throw new Error(body?.message||body?.msg||body?.error_description||body?.hint||`HTTP ${response.status}`);return body}
-function saveSession(session){state.session=session;if(session)sessionStorage.setItem("circa_admin_session",JSON.stringify(session));else sessionStorage.removeItem("circa_admin_session");renderAuth()}function restore(){try{state.session=JSON.parse(sessionStorage.getItem("circa_admin_session"))}catch(_){state.session=null}}function renderAuth(){const ok=Boolean(state.session?.access_token);$("auth").classList.toggle("hidden",ok);$("app").classList.toggle("hidden",!ok);$("user-area").classList.toggle("hidden",!ok);$("user-email").textContent=state.session?.user?.email||"";if(ok)loadDashboard().catch(handleError)}async function login(){const email=$("email").value.trim().toLowerCase(),password=$("password").value;if(!email||!password)throw new Error("Cần nhập email và mật khẩu.");const session=await request("/auth/v1/token?grant_type=password",{method:"POST",body:JSON.stringify({email,password})});saveSession(session);toast("Đăng nhập thành công.")}
-function normalize(v){return String(v||"").trim().toLowerCase().replace(/\s+/g,"_")}function positiveId(value,field,row,optional=false){const text=String(value??"").trim();if(optional&&!text)return null;if(!/^\d+$/.test(text)||Number(text)<=0)throw new Error(`Dòng ${row}: ${field} phải là số nguyên dương.`);return text}
-function validateConsultation(rows){const required=["source_product_id","source_product_name","suggested_product_id","suggested_product_name","consultation_title","consultation_note"];const pairs=new Set();return rows.map((raw,index)=>{const r={};Object.entries(raw).forEach(([k,v])=>r[normalize(k)]=v);const line=index+2,missing=required.filter(k=>!String(r[k]??"").trim());if(missing.length)throw new Error(`Dòng ${line}: thiếu ${missing.join(", ")}.`);const source=positiveId(r.source_product_id,"source_product_id",line),suggested=positiveId(r.suggested_product_id,"suggested_product_id",line);if(source===suggested)throw new Error(`Dòng ${line}: source và suggested không được trùng.`);const key=`${source}>${suggested}`;if(pairs.has(key))throw new Error(`Dòng ${line}: cặp ${key} bị trùng.`);pairs.add(key);return{source_product_id:source,source_product_name:String(r.source_product_name).trim(),suggested_product_id:suggested,suggested_product_name:String(r.suggested_product_name).trim(),consultation_title:String(r.consultation_title).trim(),consultation_note:String(r.consultation_note).trim(),category_name:String(r.category_name||r["bệnh_mãn_tính"]||"").trim()||null,priority:Number.isInteger(Number(r.priority))?Number(r.priority):100,is_active:true}})}
-function validateProgram(rows){const pairs=new Set();return rows.map((raw,index)=>{const r={};Object.entries(raw).forEach(([k,v])=>r[normalize(k)]=v);const line=index+2,source=positiveId(r.source_product_id,"source_product_id",line),related=positiveId(r.related_product_id,"related_product_id",line,true),message=String(r.message||"").trim(),relatedMessage=String(r.related_message||"").trim()||null;if(!message)throw new Error(`Dòng ${line}: thiếu message.`);if(relatedMessage&&!related)throw new Error(`Dòng ${line}: related_message cần related_product_id.`);const key=`${source}>${related||0}`;if(pairs.has(key))throw new Error(`Dòng ${line}: cặp ${key} bị trùng.`);pairs.add(key);return{source_product_id:source,related_product_id:related,message,related_message:relatedMessage}})}
-async function digest(buffer){const hash=await crypto.subtle.digest("SHA-256",buffer);return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,"0")).join("")}async function processSheet(name){const raw=XLSX.utils.sheet_to_json(state.workbook.book.Sheets[name],{defval:"",raw:false});if(!raw.length)throw new Error("Sheet không có dữ liệu.");const type=$("program-type").value,rules=type==="consultation"?validateConsultation(raw):validateProgram(raw);state.pending={filename:state.workbook.file.name,sheet:name,checksum:state.workbook.checksum,rules};$("validation").className="validation ok";$("validation").textContent=`Hợp lệ: ${rules.length} rule · Sheet: ${name}\nSHA-256: ${state.workbook.checksum}`;$("save").disabled=false;$("clear").disabled=false;renderPreview(rules,type)}async function handleFile(file){const buffer=await file.arrayBuffer(),book=XLSX.read(buffer,{type:"array"});if(!book.SheetNames.length)throw new Error("File Excel không có sheet.");state.workbook={file,book,checksum:await digest(buffer)};const select=$("sheet-select");select.replaceChildren(new Option("-- Chọn sheet --",""));book.SheetNames.forEach(n=>select.add(new Option(n,n)));$("sheet-box").classList.toggle("hidden",book.SheetNames.length===1);$("sheet-hint").textContent=`Có ${book.SheetNames.length} sheet: ${book.SheetNames.join(", ")}`;$("clear").disabled=false;if(book.SheetNames.length===1){select.value=book.SheetNames[0];await processSheet(book.SheetNames[0])}else{$("validation").textContent="Hãy chọn sheet cần import."}}
-function renderPreview(rules,type){$("preview").classList.remove("hidden");$("preview-count").textContent=`${rules.length} rule`;$("preview-table").innerHTML=type==="consultation"?`<thead><tr><th>Source ID</th><th>Source</th><th>Suggested ID</th><th>Suggested</th><th>Nội dung</th></tr></thead><tbody>${rules.map(r=>`<tr><td>${r.source_product_id}</td><td>${escapeHtml(r.source_product_name)}</td><td>${r.suggested_product_id}</td><td>${escapeHtml(r.suggested_product_name)}</td><td class="message">${escapeHtml(r.consultation_note)}</td></tr>`).join("")}</tbody>`:`<thead><tr><th>Source ID</th><th>Related ID</th><th>Message</th><th>Related message</th></tr></thead><tbody>${rules.map(r=>`<tr><td>${r.source_product_id}</td><td>${r.related_product_id||"—"}</td><td class="message">${escapeHtml(r.message)}</td><td class="message">${escapeHtml(r.related_message||"—")}</td></tr>`).join("")}</tbody>`}
-function clearFile(){state.pending=null;state.workbook=null;$("dataset-file").value="";$("validation").className="validation";$("validation").textContent="Chưa chọn file.";$("save").disabled=true;$("clear").disabled=true;$("sheet-box").classList.add("hidden");$("preview").classList.add("hidden")}
-function editorTypeChanged(){const type=$("program-type").value,isConsult=type==="consultation";$("program-name").value=isConsult?"Tư vấn bán kèm":"";$("display-title").value=isConsult?"Gợi ý tư vấn bán kèm":"";$("effective-from").disabled=isConsult;$("effective-to").disabled=isConsult;$("schema-hint").textContent=isConsult?"Excel yêu cầu: source_product_id, source_product_name, suggested_product_id, suggested_product_name, consultation_title, consultation_note.":"Excel chỉ yêu cầu: source_product_id, message. Tùy chọn: related_product_id, related_message.";renderProgramSelect();clearFile()}
-function renderProgramSelect(){const type=$("program-type").value,select=$("existing-program");select.replaceChildren(new Option(type==="consultation"?"Chương trình tư vấn mặc định":"Tạo chương trình mới",type==="consultation"?LEGACY_ID:""));state.programs.filter(p=>p.program_type===type&&p.id!==LEGACY_ID).forEach(p=>{const latest=state.versions.find(v=>v.program_id===p.id);select.add(new Option(latest?.program_name||p.id,p.id))});select.disabled=type==="consultation";select.onchange=prefillExisting}
-function prefillExisting(){const id=$("existing-program").value,latest=state.versions.find(v=>v.program_id===id);if(!latest)return;$("program-name").value=latest.program_name;$("display-title").value=latest.display_title;$("effective-from").value=latest.effective_from?latest.effective_from.slice(0,16):"";$("effective-to").value=latest.effective_to?latest.effective_to.slice(0,16):""}
-async function saveDraft(){if(!state.pending)return;const type=$("program-type").value,name=$("program-name").value.trim(),title=$("display-title").value.trim();if(!name||!title)throw new Error("Cần nhập tên chương trình và tiêu đề popup.");$("save").disabled=true;if(type==="consultation")await request("/rest/v1/rpc/create_draft_dataset",{method:"POST",body:JSON.stringify({p_source_filename:state.pending.filename,p_source_sheet_name:state.pending.sheet,p_rules:state.pending.rules,p_checksum:state.pending.checksum})});else{const from=$("effective-from").value,to=$("effective-to").value;if(!from||!to||new Date(to)<new Date(from))throw new Error("Thời gian bắt đầu/kết thúc không hợp lệ.");await request("/rest/v1/rpc/create_program_draft",{method:"POST",body:JSON.stringify({p_program_id:$("existing-program").value||null,p_program_type:type,p_program_name:name,p_display_title:title,p_effective_from:new Date(from).toISOString(),p_effective_to:new Date(to).toISOString(),p_source_filename:state.pending.filename,p_source_sheet_name:state.pending.sheet,p_rules:state.pending.rules,p_checksum:state.pending.checksum})})}toast("Đã lưu bản nháp.");clearFile();await loadDashboard()}
-async function loadDashboard(){const [bundle,programs,versions]=await Promise.all([request("/rest/v1/rpc/get_program_bundle",{method:"POST",body:"{}"}),request("/rest/v1/programs?select=id,program_type,created_at,archived_at&order=created_at.desc"),request("/rest/v1/dataset_versions?select=id,program_id,program_name,display_title,version,status,effective_from,effective_to,source_filename,source_sheet_name,row_count,created_by_email,created_at,published_by_email,published_at&order=created_at.desc")]);state.bundle=bundle;state.programs=programs;state.versions=versions;renderCards(bundle.programs||[]);renderVersions();renderProgramSelect();editorTypeChanged()}
-function renderCards(programs){$("program-cards").innerHTML=programs.length?programs.map(p=>{const status=lifecycle(p);return`<article class="program-card"><span class="badge ${status}">${typeName(p.program_type)} · ${status}</span><h3>${escapeHtml(p.program_name)}</h3><div class="meta"><span>Version</span><b>${escapeHtml(p.dataset_version)}</b><span>Hiệu lực</span><b>${date(p.effective_from)} → ${date(p.effective_to)}</b><span>File</span><b>${escapeHtml(p.source_filename||"—")} / ${escapeHtml(p.source_sheet_name||"—")}</b><span>Rules</span><b>${p.rules?.length||0}</b></div></article>`}).join(""):'<article class="card">Chưa có chương trình published.</article>'}
-function renderVersions(){const types=new Map(state.programs.map(p=>[p.id,p.program_type]));$("versions").innerHTML=`<thead><tr><th>Chương trình</th><th>Loại</th><th>Version</th><th>Trạng thái</th><th>Hiệu lực</th><th>File / sheet</th><th>Rules</th><th>Thao tác</th></tr></thead><tbody>${state.versions.map(v=>{const actions=v.status==="published"?`<button data-stop="${v.program_id}" class="danger">Dừng</button>`:`<button data-publish="${v.id}" class="${v.status==="archived"?"secondary":""}">${v.status==="archived"?"Rollback":"Publish"}</button> <button data-delete-version="${v.id}" class="danger">${v.status==="draft"?"Xóa draft":"Xóa phiên"}</button>`;return`<tr><td>${escapeHtml(v.program_name)}</td><td>${escapeHtml(typeName(types.get(v.program_id)))}</td><td>${escapeHtml(v.version)}</td><td><span class="badge">${escapeHtml(v.status)}</span></td><td>${date(v.effective_from)} → ${date(v.effective_to)}</td><td>${escapeHtml(v.source_filename)} / ${escapeHtml(v.source_sheet_name||"—")}</td><td>${v.row_count}</td><td>${actions}</td></tr>`}).join("")}</tbody>`}
-async function action(kind,id){const version=state.versions.find(v=>v.id===id);const prompt=kind==="publish"?`${version?.status==="archived"?"Rollback":"Publish"} ${version?.program_name}?`:kind==="stop"?"Dừng chương trình này trên toàn bộ POS?":`Xóa vĩnh viễn phiên ${version?.version||"này"}? Dữ liệu rule của phiên sẽ không thể khôi phục.`;if(!confirm(prompt))return;const rpc=kind==="publish"?["publish_dataset",{p_dataset_id:id}]:kind==="stop"?["stop_program",{p_program_id:id}]:["delete_dataset_version",{p_dataset_id:id}];await request(`/rest/v1/rpc/${rpc[0]}`,{method:"POST",body:JSON.stringify(rpc[1])});toast("Đã cập nhật.");await loadDashboard()}
-function handleError(error){console.error(error);toast(error.message||"Có lỗi xảy ra.");if(/jwt|token|401/i.test(error.message||""))saveSession(null)}
-$("login").onclick=()=>login().catch(handleError);$("logout").onclick=()=>saveSession(null);$("refresh").onclick=()=>loadDashboard().catch(handleError);$("program-type").onchange=editorTypeChanged;$("dataset-file").onchange=e=>{const file=e.target.files?.[0];if(file)handleFile(file).catch(e=>{$("validation").className="validation error";$("validation").textContent=e.message})};$("sheet-select").onchange=e=>{if(e.target.value)processSheet(e.target.value).catch(handleError)};$("clear").onclick=clearFile;$("save").onclick=()=>saveDraft().catch(handleError);$("versions").onclick=e=>{const t=e.target.dataset;if(t.publish)action("publish",t.publish).catch(handleError);if(t.stop)action("stop",t.stop).catch(handleError);if(t.deleteVersion)action("delete",t.deleteVersion).catch(handleError)};restore();renderAuth();editorTypeChanged();
+(function () {
+  "use strict";
+  const config = window.CIRCA_ADMIN_CONFIG,
+    $ = (id) => document.getElementById(id);
+  const LEGACY_ID = "00000000-0000-4000-8000-000000000001";
+  const state = {
+    session: null,
+    pending: null,
+    workbook: null,
+    programs: [],
+    versions: [],
+    bundle: null,
+  };
+  function toast(message) {
+    const el = $("toast");
+    el.textContent = message;
+    el.classList.add("show");
+    setTimeout(() => el.classList.remove("show"), 4000);
+  }
+  function escapeHtml(v) {
+    const n = document.createElement("div");
+    n.textContent = v ?? "";
+    return n.innerHTML;
+  }
+  function date(v) {
+    return v ? new Date(v).toLocaleString("vi-VN") : "—";
+  }
+  function typeName(v) {
+    return (
+      {
+        consultation: "Tư vấn bán kèm",
+        promotion: "Khuyến mãi",
+        marketing: "Marketing",
+        near_expiry: "Cận date",
+        combo: "Combo",
+      }[v] || v
+    );
+  }
+  function lifecycle(v) {
+    const now = Date.now(),
+      from = v.effective_from ? Date.parse(v.effective_from) : null,
+      to = v.effective_to ? Date.parse(v.effective_to) : null;
+    return Number.isFinite(from) && now < from
+      ? "scheduled"
+      : Number.isFinite(to) && now > to
+        ? "expired"
+        : "active";
+  }
+  function comboMonthLabel() {
+    return new Intl.DateTimeFormat("vi-VN", {
+      month: "2-digit",
+      year: "numeric",
+      timeZone: "Asia/Ho_Chi_Minh",
+    }).format(new Date());
+  }
+  async function request(path, options = {}) {
+    const headers = {
+      apikey: config.supabasePublishableKey,
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    };
+    if (state.session?.access_token)
+      headers.Authorization = `Bearer ${state.session.access_token}`;
+    const response = await fetch(`${config.supabaseUrl}${path}`, {
+      ...options,
+      headers,
+    });
+    const body =
+      response.status === 204 ? null : await response.json().catch(() => null);
+    if (!response.ok)
+      throw new Error(
+        body?.message ||
+          body?.msg ||
+          body?.error_description ||
+          body?.hint ||
+          `HTTP ${response.status}`,
+      );
+    return body;
+  }
+  function saveSession(session) {
+    state.session = session;
+    if (session)
+      sessionStorage.setItem("circa_admin_session", JSON.stringify(session));
+    else sessionStorage.removeItem("circa_admin_session");
+    renderAuth();
+  }
+  function restore() {
+    try {
+      state.session = JSON.parse(sessionStorage.getItem("circa_admin_session"));
+    } catch (_) {
+      state.session = null;
+    }
+  }
+  function renderAuth() {
+    const ok = Boolean(state.session?.access_token);
+    $("auth").classList.toggle("hidden", ok);
+    $("app").classList.toggle("hidden", !ok);
+    $("user-area").classList.toggle("hidden", !ok);
+    $("user-email").textContent = state.session?.user?.email || "";
+    if (ok) loadDashboard().catch(handleError);
+  }
+  async function login() {
+    const email = $("email").value.trim().toLowerCase(),
+      password = $("password").value;
+    if (!email || !password) throw new Error("Cần nhập email và mật khẩu.");
+    const session = await request("/auth/v1/token?grant_type=password", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+    saveSession(session);
+    toast("Đăng nhập thành công.");
+  }
+  function normalize(v) {
+    return String(v || "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, "_");
+  }
+  function positiveId(value, field, row, optional = false) {
+    const text = String(value ?? "").trim();
+    if (optional && !text) return null;
+    if (!/^\d+$/.test(text) || Number(text) <= 0)
+      throw new Error(`Dòng ${row}: ${field} phải là số nguyên dương.`);
+    return text;
+  }
+  function validateConsultation(rows) {
+    const required = [
+      "source_product_id",
+      "source_product_name",
+      "suggested_product_id",
+      "suggested_product_name",
+      "consultation_title",
+      "consultation_note",
+    ];
+    const pairs = new Set();
+    return rows.map((raw, index) => {
+      const r = {};
+      Object.entries(raw).forEach(([k, v]) => (r[normalize(k)] = v));
+      const line = index + 2,
+        missing = required.filter((k) => !String(r[k] ?? "").trim());
+      if (missing.length)
+        throw new Error(`Dòng ${line}: thiếu ${missing.join(", ")}.`);
+      const source = positiveId(r.source_product_id, "source_product_id", line),
+        suggested = positiveId(
+          r.suggested_product_id,
+          "suggested_product_id",
+          line,
+        );
+      if (source === suggested)
+        throw new Error(`Dòng ${line}: source và suggested không được trùng.`);
+      const key = `${source}>${suggested}`;
+      if (pairs.has(key)) throw new Error(`Dòng ${line}: cặp ${key} bị trùng.`);
+      pairs.add(key);
+      return {
+        source_product_id: source,
+        source_product_name: String(r.source_product_name).trim(),
+        suggested_product_id: suggested,
+        suggested_product_name: String(r.suggested_product_name).trim(),
+        consultation_title: String(r.consultation_title).trim(),
+        consultation_note: String(r.consultation_note).trim(),
+        category_name:
+          String(r.category_name || r["bệnh_mãn_tính"] || "").trim() || null,
+        priority: Number.isInteger(Number(r.priority))
+          ? Number(r.priority)
+          : 100,
+        is_active: true,
+      };
+    });
+  }
+  function validateProgram(rows) {
+    const pairs = new Set();
+    return rows.map((raw, index) => {
+      const r = {};
+      Object.entries(raw).forEach(([k, v]) => (r[normalize(k)] = v));
+      const line = index + 2,
+        source = positiveId(r.source_product_id, "source_product_id", line),
+        related = positiveId(
+          r.related_product_id,
+          "related_product_id",
+          line,
+          true,
+        ),
+        message = String(r.message || "").trim(),
+        relatedMessage = String(r.related_message || "").trim() || null;
+      if (!message) throw new Error(`Dòng ${line}: thiếu message.`);
+      if (relatedMessage && !related)
+        throw new Error(
+          `Dòng ${line}: related_message cần related_product_id.`,
+        );
+      const key = `${source}>${related || 0}`;
+      if (pairs.has(key)) throw new Error(`Dòng ${line}: cặp ${key} bị trùng.`);
+      pairs.add(key);
+      return {
+        source_product_id: source,
+        related_product_id: related,
+        message,
+        related_message: relatedMessage,
+      };
+    });
+  }
+  function validateCombo(rows) {
+    const required = ["combo_id", "sub_product_id", "message"];
+    const pairs = new Set();
+    const messages = new Map();
+    return rows.map((raw, index) => {
+      const r = {};
+      Object.entries(raw).forEach(([k, v]) => (r[normalize(k)] = v));
+      const line = index + 2;
+      const missing = required.filter((k) => !String(r[k] ?? "").trim());
+      const extra = Object.keys(r).filter(
+        (k) => !required.includes(k) && String(r[k] ?? "").trim(),
+      );
+      if (missing.length)
+        throw new Error("Dòng " + line + ": thiếu " + missing.join(", ") + ".");
+      if (extra.length)
+        throw new Error(
+          "Dòng " + line + ": cột không hỗ trợ " + extra.join(", ") + ".",
+        );
+      const comboId = positiveId(r.combo_id, "combo_id", line);
+      const subProductId = positiveId(r.sub_product_id, "sub_product_id", line);
+      const message = String(r.message).trim();
+      const key = comboId + ">" + subProductId;
+      if (pairs.has(key))
+        throw new Error(
+          "Dòng " + line + ": cặp combo_id và sub_product_id bị trùng.",
+        );
+      if (messages.has(comboId) && messages.get(comboId) !== message)
+        throw new Error(
+          "Dòng " + line + ": các dòng cùng combo_id phải có cùng message.",
+        );
+      pairs.add(key);
+      messages.set(comboId, message);
+      return {
+        combo_id: comboId,
+        sub_product_id: subProductId,
+        message,
+      };
+    });
+  }
+  async function digest(buffer) {
+    const hash = await crypto.subtle.digest("SHA-256", buffer);
+    return Array.from(new Uint8Array(hash))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+  }
+  async function processSheet(name) {
+    const raw = XLSX.utils.sheet_to_json(state.workbook.book.Sheets[name], {
+      defval: "",
+      raw: false,
+    });
+    if (!raw.length) throw new Error("Sheet không có dữ liệu.");
+    const type = $("program-type").value,
+      rules =
+        type === "consultation"
+          ? validateConsultation(raw)
+          : type === "combo"
+            ? validateCombo(raw)
+            : validateProgram(raw);
+    state.pending = {
+      filename: state.workbook.file.name,
+      sheet: name,
+      checksum: state.workbook.checksum,
+      rules,
+    };
+    $("validation").className = "validation ok";
+    $("validation").textContent =
+      `Hợp lệ: ${rules.length} rule · Sheet: ${name}\nSHA-256: ${state.workbook.checksum}`;
+    $("save").disabled = false;
+    $("clear").disabled = false;
+    renderPreview(rules, type);
+  }
+  async function handleFile(file) {
+    const buffer = await file.arrayBuffer(),
+      book = XLSX.read(buffer, { type: "array" });
+    if (!book.SheetNames.length) throw new Error("File Excel không có sheet.");
+    state.workbook = { file, book, checksum: await digest(buffer) };
+    const select = $("sheet-select");
+    select.replaceChildren(new Option("-- Chọn sheet --", ""));
+    book.SheetNames.forEach((n) => select.add(new Option(n, n)));
+    $("sheet-box").classList.toggle("hidden", book.SheetNames.length === 1);
+    $("sheet-hint").textContent =
+      `Có ${book.SheetNames.length} sheet: ${book.SheetNames.join(", ")}`;
+    $("clear").disabled = false;
+    if (book.SheetNames.length === 1) {
+      select.value = book.SheetNames[0];
+      await processSheet(book.SheetNames[0]);
+    } else {
+      $("validation").textContent = "Hãy chọn sheet cần import.";
+    }
+  }
+  function renderPreview(rules, type) {
+    $("preview").classList.remove("hidden");
+    if (type === "combo") {
+      const rows = rules
+        .map(
+          (r) =>
+            "<tr><td>" +
+            r.combo_id +
+            "</td><td>" +
+            r.sub_product_id +
+            '</td><td class="message">' +
+            escapeHtml(r.message) +
+            "</td></tr>",
+        )
+        .join("");
+      $("preview-count").textContent = rules.length + " rule";
+      $("preview-table").innerHTML =
+        "<thead><tr><th>Combo ID</th><th>Sub product ID</th><th>Message</th></tr></thead><tbody>" +
+        rows +
+        "</tbody>";
+      return;
+    }
+    $("preview-count").textContent = `${rules.length} rule`;
+    $("preview-table").innerHTML =
+      type === "consultation"
+        ? `<thead><tr><th>Source ID</th><th>Source</th><th>Suggested ID</th><th>Suggested</th><th>Nội dung</th></tr></thead><tbody>${rules.map((r) => `<tr><td>${r.source_product_id}</td><td>${escapeHtml(r.source_product_name)}</td><td>${r.suggested_product_id}</td><td>${escapeHtml(r.suggested_product_name)}</td><td class="message">${escapeHtml(r.consultation_note)}</td></tr>`).join("")}</tbody>`
+        : `<thead><tr><th>Source ID</th><th>Related ID</th><th>Message</th><th>Related message</th></tr></thead><tbody>${rules.map((r) => `<tr><td>${r.source_product_id}</td><td>${r.related_product_id || "—"}</td><td class="message">${escapeHtml(r.message)}</td><td class="message">${escapeHtml(r.related_message || "—")}</td></tr>`).join("")}</tbody>`;
+  }
+  function clearFile() {
+    state.pending = null;
+    state.workbook = null;
+    $("dataset-file").value = "";
+    $("validation").className = "validation";
+    $("validation").textContent = "Chưa chọn file.";
+    $("save").disabled = true;
+    $("clear").disabled = true;
+    $("sheet-box").classList.add("hidden");
+    $("preview").classList.add("hidden");
+  }
+  function editorTypeChanged() {
+    const type = $("program-type").value,
+      isConsult = type === "consultation",
+      isCombo = type === "combo";
+    $("program-name").value = isConsult
+      ? "Tư vấn bán kèm"
+      : isCombo
+        ? "Combo tháng " + comboMonthLabel()
+        : "";
+    $("display-title").value = isConsult
+      ? "Gợi ý tư vấn bán kèm"
+      : isCombo
+        ? "Chương trình combo"
+        : "";
+    $("display-title").disabled = isCombo;
+    $("effective-from").disabled = isConsult || isCombo;
+    $("effective-to").disabled = isConsult || isCombo;
+    if (isCombo) {
+      $("effective-from").value = "";
+      $("effective-to").value = "";
+    }
+    $("schema-hint").textContent = isConsult
+      ? "Excel yêu cầu: source_product_id, source_product_name, suggested_product_id, suggested_product_name, consultation_title, consultation_note."
+      : isCombo
+        ? "Excel chỉ gồm: combo_id, sub_product_id, message. Hiệu lực tự động trong tháng " +
+          comboMonthLabel() +
+          " theo giờ Việt Nam; không cần cột thời gian."
+        : "Excel chỉ yêu cầu: source_product_id, message. Tùy chọn: related_product_id, related_message.";
+    renderProgramSelect();
+    clearFile();
+  }
+  function renderProgramSelect() {
+    const type = $("program-type").value,
+      select = $("existing-program");
+    select.replaceChildren(
+      new Option(
+        type === "consultation"
+          ? "Chương trình tư vấn mặc định"
+          : "Tạo chương trình mới",
+        type === "consultation" ? LEGACY_ID : "",
+      ),
+    );
+    state.programs
+      .filter((p) => p.program_type === type && p.id !== LEGACY_ID)
+      .forEach((p) => {
+        const latest = state.versions.find((v) => v.program_id === p.id);
+        select.add(new Option(latest?.program_name || p.id, p.id));
+      });
+    select.disabled = type === "consultation";
+    select.onchange = prefillExisting;
+  }
+  function prefillExisting() {
+    const id = $("existing-program").value,
+      latest = state.versions.find((v) => v.program_id === id);
+    if (!latest) return;
+    $("program-name").value = latest.program_name;
+    $("display-title").value = latest.display_title;
+    $("effective-from").value = latest.effective_from
+      ? latest.effective_from.slice(0, 16)
+      : "";
+    $("effective-to").value = latest.effective_to
+      ? latest.effective_to.slice(0, 16)
+      : "";
+  }
+  async function saveDraft() {
+    if (!state.pending) return;
+    const type = $("program-type").value,
+      name = $("program-name").value.trim(),
+      title = $("display-title").value.trim();
+    if (!name || !title)
+      throw new Error("Cần nhập tên chương trình và tiêu đề popup.");
+    $("save").disabled = true;
+    if (type === "consultation")
+      await request("/rest/v1/rpc/create_draft_dataset", {
+        method: "POST",
+        body: JSON.stringify({
+          p_source_filename: state.pending.filename,
+          p_source_sheet_name: state.pending.sheet,
+          p_rules: state.pending.rules,
+          p_checksum: state.pending.checksum,
+        }),
+      });
+    else if (type === "combo")
+      await request("/rest/v1/rpc/create_combo_draft", {
+        method: "POST",
+        body: JSON.stringify({
+          p_program_id: $("existing-program").value || null,
+          p_program_name: name,
+          p_source_filename: state.pending.filename,
+          p_source_sheet_name: state.pending.sheet,
+          p_rules: state.pending.rules,
+          p_checksum: state.pending.checksum,
+        }),
+      });
+    else {
+      const from = $("effective-from").value,
+        to = $("effective-to").value;
+      if (!from || !to || new Date(to) < new Date(from))
+        throw new Error("Thời gian bắt đầu/kết thúc không hợp lệ.");
+      await request("/rest/v1/rpc/create_program_draft", {
+        method: "POST",
+        body: JSON.stringify({
+          p_program_id: $("existing-program").value || null,
+          p_program_type: type,
+          p_program_name: name,
+          p_display_title: title,
+          p_effective_from: new Date(from).toISOString(),
+          p_effective_to: new Date(to).toISOString(),
+          p_source_filename: state.pending.filename,
+          p_source_sheet_name: state.pending.sheet,
+          p_rules: state.pending.rules,
+          p_checksum: state.pending.checksum,
+        }),
+      });
+    }
+    toast("Đã lưu bản nháp.");
+    clearFile();
+    await loadDashboard();
+  }
+  async function loadDashboard() {
+    const [bundle, programs, versions] = await Promise.all([
+      request("/rest/v1/rpc/get_program_bundle", {
+        method: "POST",
+        body: "{}",
+      }),
+      request(
+        "/rest/v1/programs?select=id,program_type,created_at,archived_at&order=created_at.desc",
+      ),
+      request(
+        "/rest/v1/dataset_versions?select=id,program_id,program_name,display_title,version,status,effective_from,effective_to,source_filename,source_sheet_name,row_count,created_by_email,created_at,published_by_email,published_at&order=created_at.desc",
+      ),
+    ]);
+    state.bundle = bundle;
+    state.programs = programs;
+    state.versions = versions;
+    renderCards(bundle.programs || []);
+    renderVersions();
+    renderProgramSelect();
+    editorTypeChanged();
+  }
+  function renderCards(programs) {
+    $("program-cards").innerHTML = programs.length
+      ? programs
+          .map((p) => {
+            const status = lifecycle(p);
+            return `<article class="program-card"><span class="badge ${status}">${typeName(p.program_type)} · ${status}</span><h3>${escapeHtml(p.program_name)}</h3><div class="meta"><span>Version</span><b>${escapeHtml(p.dataset_version)}</b><span>Hiệu lực</span><b>${date(p.effective_from)} → ${date(p.effective_to)}</b><span>File</span><b>${escapeHtml(p.source_filename || "—")} / ${escapeHtml(p.source_sheet_name || "—")}</b><span>Rules</span><b>${p.rules?.length || 0}</b></div></article>`;
+          })
+          .join("")
+      : '<article class="card">Chưa có chương trình published.</article>';
+  }
+  function renderVersions() {
+    const types = new Map(state.programs.map((p) => [p.id, p.program_type]));
+    $("versions").innerHTML =
+      `<thead><tr><th>Chương trình</th><th>Loại</th><th>Version</th><th>Trạng thái</th><th>Hiệu lực</th><th>File / sheet</th><th>Rules</th><th>Thao tác</th></tr></thead><tbody>${state.versions
+        .map((v) => {
+          const actions =
+            v.status === "published"
+              ? `<button data-stop="${v.program_id}" class="danger">Dừng</button>`
+              : `<button data-publish="${v.id}" class="${v.status === "archived" ? "secondary" : ""}">${v.status === "archived" ? "Rollback" : "Publish"}</button> <button data-delete-version="${v.id}" class="danger">${v.status === "draft" ? "Xóa draft" : "Xóa phiên"}</button>`;
+          return `<tr><td>${escapeHtml(v.program_name)}</td><td>${escapeHtml(typeName(types.get(v.program_id)))}</td><td>${escapeHtml(v.version)}</td><td><span class="badge">${escapeHtml(v.status)}</span></td><td>${date(v.effective_from)} → ${date(v.effective_to)}</td><td>${escapeHtml(v.source_filename)} / ${escapeHtml(v.source_sheet_name || "—")}</td><td>${v.row_count}</td><td>${actions}</td></tr>`;
+        })
+        .join("")}</tbody>`;
+  }
+  async function action(kind, id) {
+    const version = state.versions.find((v) => v.id === id);
+    const prompt =
+      kind === "publish"
+        ? `${version?.status === "archived" ? "Rollback" : "Publish"} ${version?.program_name}?`
+        : kind === "stop"
+          ? "Dừng chương trình này trên toàn bộ POS?"
+          : `Xóa vĩnh viễn phiên ${version?.version || "này"}? Dữ liệu rule của phiên sẽ không thể khôi phục.`;
+    if (!confirm(prompt)) return;
+    const rpc =
+      kind === "publish"
+        ? ["publish_dataset", { p_dataset_id: id }]
+        : kind === "stop"
+          ? ["stop_program", { p_program_id: id }]
+          : ["delete_dataset_version", { p_dataset_id: id }];
+    await request(`/rest/v1/rpc/${rpc[0]}`, {
+      method: "POST",
+      body: JSON.stringify(rpc[1]),
+    });
+    toast("Đã cập nhật.");
+    await loadDashboard();
+  }
+  function handleError(error) {
+    console.error(error);
+    toast(error.message || "Có lỗi xảy ra.");
+    if (/jwt|token|401/i.test(error.message || "")) saveSession(null);
+  }
+  $("login").onclick = () => login().catch(handleError);
+  $("logout").onclick = () => saveSession(null);
+  $("refresh").onclick = () => loadDashboard().catch(handleError);
+  $("program-type").onchange = editorTypeChanged;
+  $("dataset-file").onchange = (e) => {
+    const file = e.target.files?.[0];
+    if (file)
+      handleFile(file).catch((e) => {
+        $("validation").className = "validation error";
+        $("validation").textContent = e.message;
+      });
+  };
+  $("sheet-select").onchange = (e) => {
+    if (e.target.value) processSheet(e.target.value).catch(handleError);
+  };
+  $("clear").onclick = clearFile;
+  $("save").onclick = () => saveDraft().catch(handleError);
+  $("versions").onclick = (e) => {
+    const t = e.target.dataset;
+    if (t.publish) action("publish", t.publish).catch(handleError);
+    if (t.stop) action("stop", t.stop).catch(handleError);
+    if (t.deleteVersion) action("delete", t.deleteVersion).catch(handleError);
+  };
+  restore();
+  renderAuth();
+  editorTypeChanged();
 })();
